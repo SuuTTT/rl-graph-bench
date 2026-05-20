@@ -8,9 +8,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### TODO
+
+#### Paper Reproduce Targets
+
+| Algo | Paper | arXiv | Metric | Target | Dataset | vs Baseline |
+|------|-------|-------|--------|--------|---------|-------------|
+| NeuroCUT | Shah et al., KDD 2024 | [2310.11787](https://arxiv.org/abs/2310.11787) | NCut ↓ | **0.33** | Cora k=5 | GAP=0.68 (−51%) |
+| NeuroCUT | Shah et al., KDD 2024 | [2310.11787](https://arxiv.org/abs/2310.11787) | Sparsest Cut ↓ | **1.46** | Cora k=5 | DMon=1.89 (−23%) |
+| WRT (RidgeCut) | Jiang et al., 2025 | [2505.13986](https://arxiv.org/abs/2505.13986) | NCut ↓ | **0.060** | City Traffic k=4 n=100 | NeuroCUT=0.078 (−23%) |
+| CLARE | Wu et al., KDD 2022 | [2210.08274](https://arxiv.org/abs/2210.08274) | F1 ↑ | SOTA | SNAP DBLP/Amazon/LJ | prior methods |
+| SLRL | *(no paper found)* | — | F1 ↑ | near-CLARE | SNAP DBLP | CLARE |
+| AC2CD | *(no paper found)* | — | NCut ↓ | beat static | temporal snapshots | static baseline |
+| SS2V-D3QN | *(no paper found)* | — | Multicut ↓ | near-optimal | Cora/CiteSeer small | brute-force |
+
 - [ ] **Close paper gap** — NeuroCUT currently 2.9% behind Spectral (NCut 0.417 vs 0.406 on mini5).  
       Paper target: −18% vs Spectral (NCut ≤ 0.333). Needs ~5k ep + larger training graphs.
-- [ ] **WRT training** — stub exists; PPO trainer exists; wire up WRT Trainer + full eval to close H² gap (paper: −12% vs Leiden).
+- [ ] **WRT training** — stub exists; PPO trainer exists; wire up WRT Trainer + full eval. Paper target (RidgeCut arXiv:2505.13986): City Traffic k=4 n=100 NCut ≤ 0.060 (vs NeuroCUT 0.078, METIS 0.162).
 - [ ] **AC2CD training** — stub exists; A2C trainer exists; needs temporal-snapshot env integration.
 - [ ] **SS2V-D3QN training** — stub exists; DQN trainer exists; needs edge-contraction env + replay buffer wiring.
 - [ ] **Real-world loaders** — `pyg_loaders.py` + `snap_loaders.py` exist but datasets are downloaded lazily; add Cora/CiteSeer/DBLP benchmarks to `full_benchmark.py`.

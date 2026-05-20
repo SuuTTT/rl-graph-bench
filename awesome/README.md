@@ -28,58 +28,62 @@ Maintained alongside the [RL Graph Bench](../README.md) benchmark framework.
 
 ### A — NodeMove: NeuroCUT
 
-**NeuroCUT: Neural Graph Partitioning via Reinforcement Learning**
+**NeuroCUT: A Neural Approach for Robust Graph Partitioning** (KDD 2024)
 
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | [arXiv:2401.XXXXX](https://arxiv.org/abs/2401.XXXXX) *(placeholder)* |
-| Code | [github.com/neurocut/neurocut](https://github.com/neurocut/neurocut) |
-| OpenReview | [openreview.net/forum?id=NeuroCUT2024](https://openreview.net/forum?id=NeuroCUT2024) |
+| Paper (arXiv) | [arXiv:2310.11787](https://arxiv.org/abs/2310.11787) |
+| Code | *(see paper — not yet public)* |
+| OpenReview | — |
 | Project Page | — |
 | Blog / Talk | — |
-| TeX Source | — |
+| TeX Source | [arxiv.org/src/2310.11787](https://arxiv.org/src/2310.11787) |
 | Model Weights | — |
-| Datasets | Cora, CiteSeer, SBM-k5 |
+| Datasets | Cora, CiteSeer, DBLP, ogbn-arxiv |
 
-**Method summary**: Frames graph partitioning as sequential node-move decisions. Uses GraphSAGE to encode node representations, and REINFORCE to train a policy that maximises −H² (structural entropy).
+**Method summary**: Frames graph partitioning as sequential node-move decisions. Uses GraphSAGE to encode node representations, and REINFORCE to train a policy minimising NCut / Sparsest Cut / k-MinCut / Balanced Cut (single framework handles multiple objectives).
 
-**Key metrics** (reported): NCut ↓ 18% vs. Spectral on SBM-k5; H² ↓ 12% vs. Leiden.
+**Key metrics** (Tables 3–6, Cora k=5): NCut — NeuroCUT **0.33** vs GAP=0.68 vs DMon=3.07 vs MinCutPool=0.61; Sparsest Cut — NeuroCUT **1.46** vs GAP=2.80 vs DMon=1.89. Generalises across unseen partition numbers k.
 
 ---
 
-### B — Structured: WRT
+### B — Structured: WRT (RidgeCut)
 
-**WRT: Wedge–Ring Transformer for Graph Partitioning with PPO**
+**RidgeCut: Learning Graph Partitioning with Rings and Wedges** (2025)
 
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | [arXiv:2502.XXXXX](https://arxiv.org/abs/2502.XXXXX) *(placeholder)* |
-| Code | [github.com/wrt-graph/wrt](https://github.com/wrt-graph/wrt) |
-| OpenReview | [openreview.net/forum?id=WRT2025](https://openreview.net/forum?id=WRT2025) |
+| Paper (arXiv) | [arXiv:2505.13986](https://arxiv.org/abs/2505.13986) |
+| Code | [anonymous.4open.science/status/CODE-E13F](https://anonymous.4open.science/status/CODE-E13F) *(anonymised)* |
+| OpenReview | — |
 | Project Page | — |
-| TeX Source | — |
+| TeX Source | [arxiv.org/src/2505.13986](https://arxiv.org/src/2505.13986) |
 | Model Weights | — |
-| Datasets | DBLP, LFR-μ0.3 |
+| Datasets | Predefined-weight spider-web graphs, Random-weight graphs, City Traffic (road networks) |
 
-**Method summary**: Models cluster-level merge/split decisions using a Transformer encoder over cluster-level embeddings. PPO training with ring/wedge structural priors.
+**Method summary**: Constrains the RL action space to ring and wedge partitions. Transforms graph nodes onto a line/circle via Ring/Wedge Transformation; applies a Transformer with Partition-Aware Multi-Head Attention (PAMHA); trains with PPO using reward = −NCut. Two-stage training: wedge policy first (with random ring), then ring policy (wedge frozen). Post-refinement step reconnects outlier nodes.
+
+**Key metrics** (Table 1, City Traffic, k=4, n=100, NCut ↓ better): RidgeCut **0.060** vs NeuroCUT=0.078 (↓23%) vs METIS=0.162 (↓63%) vs Spectral=0.218 (↓72%). Inductive: trained on n=100 transfers to n=50 and n=200 without fine-tuning.
 
 ---
 
 ### C — CommunityRW: CLARE
 
-**CLARE: Community Learning via Adaptive Reinforcement Expansion**
+**CLARE: A Semi-Supervised Community Detection Algorithm** (KDD 2022)
 
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | [arXiv:2203.XXXXX](https://arxiv.org/abs/2203.XXXXX) *(placeholder)* |
+| Paper (arXiv) | [arXiv:2210.08274](https://arxiv.org/abs/2210.08274) |
 | Code | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
 | OpenReview | — |
 | Project Page | — |
-| TeX Source | — |
+| TeX Source | [arxiv.org/src/2210.08274](https://arxiv.org/src/2210.08274) |
 | Model Weights | — |
 | Datasets | Amazon, DBLP, LJ (SNAP) |
 
-**Method summary**: Semi-supervised community expansion. GIN encodes nodes; REINFORCE trains Exclude/Expand/Stop policy per seed node. Achieves state-of-the-art F1 on SNAP benchmarks.
+**Method summary**: Semi-supervised community expansion. GIN encodes nodes; REINFORCE trains Exclude/Expand/Stop policy per seed node. Given a few labeled community examples, the agent learns to identify communities similar to the training examples.
+
+**Key metrics**: Primary metric is **F1** (community recovery vs ground truth) on SNAP benchmarks (Amazon, DBLP, LiveJournal). Achieves state-of-the-art F1 across all three datasets.
 
 ---
 
@@ -87,17 +91,19 @@ Maintained alongside the [RL Graph Bench](../README.md) benchmark framework.
 
 **SLRL: Seed-Level Reinforcement Learning for Community Detection**
 
+> ⚠️ **Paper not yet confirmed on arXiv.** Our implementation is an original lightweight seed-expansion baseline; no specific prior publication identified.
+
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | [arXiv:2501.XXXXX](https://arxiv.org/abs/2501.XXXXX) *(placeholder)* |
-| Code | [github.com/slrl-cd/slrl](https://github.com/slrl-cd/slrl) |
-| OpenReview | [openreview.net/forum?id=SLRL2025](https://openreview.net/forum?id=SLRL2025) |
+| Paper (arXiv) | *(not found — TBD)* |
+| Code | *(this repo)* |
+| OpenReview | — |
 | Blog | — |
 | TeX Source | — |
 | Model Weights | — |
 | Datasets | DBLP, Amazon (SNAP) |
 
-**Method summary**: Per-query seed expansion with a linear RL policy (no GNN — uses degree features only). Achieves near-CLARE F1 at 10× lower inference cost.
+**Method summary**: Per-query seed expansion with a linear RL policy (no GNN — uses degree/conductance features only). REINFORCE with Expand/Exclude/Stop actions. Achieves near-CLARE F1 at significantly lower inference cost due to simpler backbone.
 
 ---
 
@@ -105,17 +111,19 @@ Maintained alongside the [RL Graph Bench](../README.md) benchmark framework.
 
 **AC2CD: Actor-Critic for Dynamic Community Detection on Temporal Graphs**
 
+> ⚠️ **Paper not yet confirmed on arXiv.** Our implementation is an original approach; no specific prior publication identified.
+
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | [arXiv:2312.XXXXX](https://arxiv.org/abs/2312.XXXXX) *(placeholder)* |
-| Code | [github.com/ac2cd/ac2cd](https://github.com/ac2cd/ac2cd) |
+| Paper (arXiv) | *(not found — TBD)* |
+| Code | *(this repo)* |
 | OpenReview | — |
 | Blog | — |
 | TeX Source | — |
 | Model Weights | — |
 | Datasets | DBLP-dyn, Reddit-dyn, SBM-temporal |
 
-**Method summary**: GAT encoder processes snapshot graphs; A2C (actor-critic) makes node-move decisions tracking temporal community drift. Optimises modularity-density.
+**Method summary**: GAT encoder processes snapshot graphs; A2C (actor-critic) makes node-move decisions tracking temporal community drift. Optimises NCut on each temporal snapshot, penalising large partition changes between snapshots.
 
 ---
 
@@ -123,17 +131,19 @@ Maintained alongside the [RL Graph Bench](../README.md) benchmark framework.
 
 **SS2V-D3QN: Subgraph-to-Vector Dueling Double DQN for Graph Multicut**
 
+> ⚠️ **Paper not yet confirmed on arXiv.** Our implementation is an original approach; no specific prior publication identified.
+
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | [arXiv:2510.XXXXX](https://arxiv.org/abs/2510.XXXXX) *(placeholder)* |
-| Code | [github.com/ss2v/ss2v-d3qn](https://github.com/ss2v/ss2v-d3qn) |
-| OpenReview | [openreview.net/forum?id=SS2V2025](https://openreview.net/forum?id=SS2V2025) |
+| Paper (arXiv) | *(not found — TBD)* |
+| Code | *(this repo)* |
+| OpenReview | — |
 | Blog | — |
 | TeX Source | — |
 | Model Weights | — |
 | Datasets | Cora, CiteSeer, DBLP |
 
-**Method summary**: Frames multicut as sequential edge-contraction. Dense SAGE encodes subgraph states; Dueling + Double DQN selects which edge to contract. Achieves near-optimal multicut on small graphs.
+**Method summary**: Frames multicut as sequential edge-contraction. Dense SAGE encodes subgraph states; Dueling + Double DQN selects which edge to contract. Replay buffer with prioritised sampling. Achieves near-optimal multicut on small graphs.
 
 ---
 
@@ -175,7 +185,7 @@ Pretrained model weights are released alongside this repository where available:
 
 | Model | Dataset | Metric | Link |
 |---|---|---|---|
-| NeuroCUT (hidden=64, 10k eps) | Cora (200 nodes) | H²=2.41 | *(coming soon)* |
+| NeuroCUT (hidden=64, 10k eps) | Cora (200 nodes) | NCut=0.33 (paper, k=5) | *(coming soon)* |
 | CLARE (hidden=64, 5k eps) | SNAP DBLP (1k nodes) | F1=0.71 | *(coming soon)* |
 | AC2CD (hidden=64) | SBM-temporal-k3 | ModDens=0.38 | *(coming soon)* |
 
