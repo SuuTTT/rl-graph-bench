@@ -1,0 +1,179 @@
+---
+title: "Benchmark Design Philosophy"
+author: "RL Graph Bench Contributors"
+date: "2025-06-29"
+categories: [benchmark, design, reproducibility, API]
+description: |
+  How we designed the RL Graph Bench framework to make RL graph-clustering
+  research reproducible, fast to iterate on, and easy to extend — including
+  the fast-feedback dev loop, unified metrics, and the 5-algo × 3-task
+  design matrix.
+---
+
+## Why Another Benchmark?
+
+Before RL Graph Bench, there was no common evaluation harness for RL-based
+graph clustering. Each paper used a different:
+
+- **Graph library** (igraph, networkx, PyG, DGL)
+- **Metric** (modularity, NCut, F1, H²)
+- **Dataset** (Cora processed differently by each lab)
+- **Training loop** (custom, non-reproducible)
+
+Reproducing a result from AC2CD required understanding its bespoke codebase
+from scratch. Comparing it to NeuroCUT required porting one into the other's
+framework.
+
+RL Graph Bench fixes this with a single interface that every algo implements.
+
+---
+
+## Design Principles
+
+### 1. Protocol-Driven, Not Inheritance-Driven
+
+Every algorithm implements the `RLAgent` ABC:
+
+```python
+class RLAgent(ABC):
+    name: str
+    compatible_tasks: list[str]
+
+    @abstractmethod
+    def select_action(self, obs: dict, greedy: bool = False) -> int: ...
+
+    @abstractmethod
+    def update(self) -> dict[str, float]: ...
+
+    @abstractmethod
+    def save(self, path) -> None: ...
+
+    @abstractmethod
+    def load(self, path) -> None: ...
+```
+
+Any algo that satisfies this protocol works with the `Trainer` and eval
+harness — no framework subclassing required.
+
+### 2. The 3 × 5 Design Matrix
+
+| | NeuroCUT | WRT | CLARE | SLRL | AC2CD | SS2V-D3QN |
+|---|---|---|---|---|---|---|
+| Partition | ✓ | ✓ | | | ✓ | ✓ |
+| Community | | | ✓ | ✓ | | |
+| Dynamic | | | | | ✓ | |
+
+Each row is a task; each column is an algorithm. The matrix makes it easy
+to see which algorithm applies to which problem.
+
+### 3. Fast Feedback Loop
+
+The canonical dev loop is:
+
+```bash
+# 1. Quick smoke test — 3 minutes
+rlgb run --algo neurocut --task partition --dataset mini5 --steps 100
+
+# 2. Full mini eval — 10 minutes
+rlgb eval --algo neurocut --dataset mini5 --seeds 3
+
+# 3. Full benchmark — 2–4 hours
+rlgb run --algo neurocut --dataset fixed17 --steps 2000
+rlgb eval --algo neurocut --dataset fixed17 --seeds 5
+```
+
+The `mini5` suite (5 small SBMs, n=20–50) gives a quick signal before
+committing to the 17-graph `fixed17` suite.
+
+### 4. Reproducible Metrics
+
+Every eval run produces a CSV with *all* metrics, not just the primary one:
+
+| Metric | Task type | Direction |
+|---|---|---|
+| H² | partition | ↓ lower is better |
+| NCut | partition | ↓ |
+| Modularity | partition | ↑ higher is better |
+| Modularity density | dynamic | ↑ |
+| F1 | community | ↑ |
+| NMI | all | ↑ |
+| ARI | all | ↑ |
+| ACC (Hungarian) | all | ↑ |
+
+Storing all metrics avoids cherry-picking.
+
+### 5. Separation of Concerns
+
+```
+rlgb/
+  tasks/       # What to optimise (reward, metrics, env factory)
+  envs/        # How the MDP is structured (obs space, step logic)
+  algos/       # Policy + update rule
+  models/      # Reusable GNN encoders (SAGE, GIN, GAT)
+  training/    # Generic Trainer + REINFORCE utils
+  eval/        # Metrics + harness + summary
+  data/        # Synthetic generators + real-graph loaders
+  cli.py       # Typer CLI
+```
+
+Tasks don't know about algos. Algos don't know about the environment
+internals. The `Trainer` glues them together.
+
+---
+
+## The `Trainer` Loop
+
+```python
+for episode in range(config.n_episodes):
+    prob = random.choice(suite)
+    env  = env_fn(prob)
+    obs, _ = env.reset(seed=episode)
+    algo.reset_episode()
+    buf = EpisodeBuffer()
+    
+    for _ in range(config.horizon):
+        action = algo.select_action(obs, greedy=False)
+        obs2, reward, terminated, truncated, info = env.step(action)
+        buf.push(Transition(obs, action, reward, obs2, terminated or truncated, info))
+        obs = obs2
+        if terminated or truncated:
+            break
+
+    if len(buf) > 0:
+        algo.push_episode(buf)
+
+    if episode % config.n_episode_per_update == 0:
+        metrics = algo.update()
+        log(episode, metrics)
+```
+
+One episode = one random problem from the suite. This trains the policy to
+generalise across the diversity of training graphs, not overfit to one.
+
+---
+
+## Extending the Framework
+
+To add a new algorithm:
+
+1. Create `rlgb/algos/myfamily/myalgo.py` implementing `RLAgent`.
+2. Add an `__init__.py` to the subpackage.
+3. Register in `rlgb/cli.py` (`_get_algo` function).
+4. Write a test in `tests/test_myalgo.py`.
+
+That's it. The `Trainer`, eval harness, and dashboard work automatically.
+
+---
+
+## Reproducibility Checklist
+
+- [x] Fixed random seeds in `Trainer` and eval harness.
+- [x] All hyperparameters are dataclass fields, logged to JSONL.
+- [x] Checkpoints include algo name + version string.
+- [x] `fixed17()` suite is deterministic (numpy seed pinned).
+- [x] All eval results exported as CSV with all metrics.
+- [x] `rlgb run` and `rlgb eval` are fully CLI-driven (no notebooks required).
+
+---
+
+[← AC2CD](04-dynamic.qmd) | [Awesome page →](../awesome/README.md)

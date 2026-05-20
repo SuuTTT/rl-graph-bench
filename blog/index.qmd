@@ -1,0 +1,14 @@
+---
+title: "RL Graph Bench"
+listing:
+  contents: "*.qmd"
+  exclude: "index.qmd"
+  sort: "date"
+  type: default
+  fields: [date, title, description, categories]
+---
+
+Welcome to the **RL Graph Bench** blog — distill-quality writeups on
+reinforcement-learning approaches to graph clustering (2022–2026).
+
+## Posts

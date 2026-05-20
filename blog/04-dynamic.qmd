@@ -1,0 +1,140 @@
+---
+title: "AC2CD: Actor-Critic for Dynamic Community Detection"
+author: "RL Graph Bench Contributors"
+date: "2025-06-22"
+categories: [deep-dive, AC2CD, dynamic-graphs, A2C, GAT]
+description: |
+  How AC2CD uses a GAT encoder and an A2C policy to track community drift
+  across temporal graph snapshots — and why temporal smoothness requires
+  a different reward design than static partitioning.
+---
+
+## The Dynamic Community Detection Challenge
+
+Real-world graphs evolve: new edges form, old ones break, and communities
+shift. Static clustering re-runs are expensive and miss temporal consistency
+— a node that flips clusters between time steps produces an unstable
+tracking result.
+
+**AC2CD** frames dynamic CD as an RL problem over a sequence of graph
+snapshots $G_1, G_2, \ldots, G_T$:
+
+- At each snapshot the agent observes the current graph.
+- It makes node-move decisions to update the partition.
+- The reward combines *partition quality* (modularity density) and
+  *temporal stability* (penalising unnecessary cluster flips).
+
+---
+
+## Graph Attention Network Encoder
+
+AC2CD encodes node states with a **multi-head GAT**:
+
+$$
+\alpha_{ij} = \frac{\exp\!\left(\text{LeakyReLU}\!\left(\mathbf{a}^\top [\mathbf{W} h_i \,\|\, \mathbf{W} h_j]\right)\right)}{\sum_{k \in \mathcal{N}(i)} \exp\!\left(\text{LeakyReLU}\!\left(\mathbf{a}^\top [\mathbf{W} h_i \,\|\, \mathbf{W} h_k]\right)\right)}
+$$
+
+$$
+h_i' = \sigma\!\left(\frac{1}{K}\sum_{k=1}^{K} \sum_{j \in \mathcal{N}(i)} \alpha_{ij}^{(k)} \mathbf{W}^{(k)} h_j\right)
+$$
+
+GAT's attention mechanism is especially suited to dynamic graphs: attention
+weights naturally up-weight neighbours that are strongly connected, providing
+resistance to noise-edge perturbations between snapshots.
+
+---
+
+## Snapshot Transition in the Environment
+
+The `DynamicCDEnv` advances the graph snapshot every `horizon / n_snapshots`
+steps:
+
+```python
+class DynamicCDEnv(ClusteringEnv):
+    def step(self, action):
+        # Apply node-move action to current snapshot
+        ...
+        self._step_count += 1
+        if self._step_count % self._snap_interval == 0:
+            self._snap_idx = min(self._snap_idx + 1, len(snapshots) - 1)
+            self._adj = snapshots[self._snap_idx]
+        ...
+```
+
+This means the agent must learn to be proactive: it should pre-position nodes
+near their new communities *before* the snapshot transitions, not react after.
+
+---
+
+## Reward Design: Quality + Stability
+
+The base reward is Δ-modularity density:
+
+$$
+r_t = \text{ModDens}(\ell^{(t+1)}) - \text{ModDens}(\ell^{(t)})
+$$
+
+where **modularity density** (Li 2008) is:
+
+$$
+D = \sum_{c=1}^k \frac{2 m_c}{n_c} - \frac{\left(\sum_{c} 2m_c\right) \cdot n_c}{\sum_c n_c^2}
+$$
+
+(balances intra-cluster density against cluster sizes, avoiding the
+resolution limit of standard modularity).
+
+---
+
+## A2C vs REINFORCE for Dynamic Settings
+
+AC2CD uses **Advantage Actor-Critic (A2C)** rather than vanilla REINFORCE.
+Key differences:
+
+| Property | REINFORCE | A2C |
+|---|---|---|
+| Gradient variance | High | Low (baseline reduces variance) |
+| Online updates | Every episode | Every few steps |
+| Memory | Episode buffer | Mini-batch from rollout |
+| Suitable for long horizons | ✗ | ✓ |
+
+For dynamic graphs where horizons span multiple snapshots (T × horizon/T steps
+total), A2C's lower variance is critical.
+
+---
+
+## Quick Start
+
+```python
+from rlgb.tasks.dynamic_cd import DynamicCDTask
+from rlgb.algos.dynamic.ac2cd import AC2CDAlgo, AC2CDConfig
+from rlgb.training.trainer import Trainer, TrainConfig
+
+task = DynamicCDTask()
+algo = AC2CDAlgo(AC2CDConfig(hidden=64, n_heads=4))
+
+trainer = Trainer(
+    algo=algo,
+    env_fn=lambda p: task.build_env(p, horizon=15),
+    config=TrainConfig(n_episodes=300, lr=5e-4),
+)
+trainer.train(suite=task.build_suite())
+```
+
+---
+
+## Synthetic Dynamic Benchmark
+
+The `DynamicCDTask` ships a 3-problem synthetic suite:
+
+```python
+from rlgb.tasks.dynamic_cd import DynamicCDTask
+suite = DynamicCDTask().build_suite()
+# 3 SBM graphs, each with 3 snapshots
+# Snapshot transitions = ±10% edge perturbations
+```
+
+Each snapshot perturbs 10% of edges, simulating mild community drift.
+
+---
+
+[← CLARE vs SLRL](03-community.qmd) | [Benchmark Design →](05-benchmark.qmd)

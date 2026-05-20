@@ -1,0 +1,44 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "RL Graph Bench — Blog"
+  description: "Distill-quality writeups on reinforcement-learning approaches to graph clustering (2022–2026)."
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: 01-landscape.qmd
+        text: Landscape
+      - href: 02-neurocut.qmd
+        text: NeuroCUT
+      - href: 03-community.qmd
+        text: Community RL
+      - href: 04-dynamic.qmd
+        text: Dynamic CD
+      - href: 05-benchmark.qmd
+        text: Benchmark Design
+    right:
+      - icon: github
+        href: https://github.com/rl-graph-bench/rl-graph-bench
+
+  sidebar:
+    style: "docked"
+    search: true
+
+format:
+  html:
+    theme: [cosmo, custom.scss]
+    code-fold: true
+    code-tools: true
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    fig-align: center
+    html-math-method: katex
+    include-in-header:
+      text: |
+        <link rel="stylesheet" href="https://distill.pub/guide/static/article.css" />
+
+bibliography: references.bib

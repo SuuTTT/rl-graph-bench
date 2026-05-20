@@ -1,0 +1,132 @@
+---
+title: "CLARE vs SLRL: Community Expansion with RL"
+author: "RL Graph Bench Contributors"
+date: "2025-06-15"
+categories: [deep-dive, CLARE, SLRL, community-detection, REINFORCE]
+description: |
+  A head-to-head comparison of CLARE (GIN + Exclude/Expand policy) and
+  SLRL (seed-level linear RL). When does the heavier GNN model pay off?
+---
+
+## The Community Expansion Problem
+
+*Semi-supervised community detection* starts from a handful of **seed nodes**
+known to belong to a community, then expands outward to recover the full
+membership. Formally, given graph $G$ and seed set $S_c$ for community $c$,
+find $C_c \supseteq S_c$ maximising **F1** against ground truth.
+
+This differs from partition-style clustering:
+- The number of communities is not fixed.
+- Communities may overlap.
+- The agent only expands *one community at a time*.
+
+---
+
+## CLARE: GIN + Exclude/Expand/Stop
+
+### Architecture
+
+CLARE uses a **Graph Isomorphism Network (GIN)** encoder:
+
+$$
+h_v^{(l+1)} = \text{MLP}^{(l)}\!\left((1 + \epsilon) h_v^{(l)} + \sum_{u \in \mathcal N(v)} h_u^{(l)}\right)
+$$
+
+The policy head is a triple:
+
+| Head | Output | Semantics |
+|---|---|---|
+| `ExcludeNet` | $\text{logit}_v \in \mathbb{R}$ | Remove node $v$ from current community |
+| `ExpandNet` | $\text{logit}_v \in \mathbb{R}$ | Add boundary node $v$ to community |
+| Value head | scalar | Baseline for REINFORCE |
+
+### Action Space
+
+At each step, the legal actions are:
+
+$$
+\mathcal{A} = \underbrace{\{v : v \in C_c\}}_{\text{exclude}} \cup \underbrace{\{v : v \notin C_c,\, \exists u \in C_c, (u,v) \in E\}}_{\text{expand}} \cup \{\text{STOP}\}
+$$
+
+Flat-indexed as `[exclude_0, …, expand_0, …, STOP]`.
+
+### Reward
+
+$$
+r_t = F_1(C_c^{(t+1)},\, C_c^*) - F_1(C_c^{(t)},\, C_c^*)
+$$
+
+Dense step-level F1 improvement.
+
+---
+
+## SLRL: Seed-Level Linear RL
+
+SLRL is intentionally lightweight. It abandons the GNN and uses only:
+
+- **Seed embedding**: a learned vector for the query seed.
+- **Node features**: just node degree (1-dim).
+- **Backbone**: two linear blocks with Swish activation.
+
+The forward pass:
+
+```python
+seed_emb = self.seed_embedding(seed_id)   # (emb_dim,)
+node_emb  = self.node_embed(degree_feat)  # (N, emb_dim)
+combo     = seed_emb + node_emb.mean(0)   # (emb_dim,)
+node_scores = self.node_score(node_emb)   # (N,)
+stop_score  = self.stop_score(combo)      # (1,)
+value       = self.value_head(combo)      # (1,)
+```
+
+The node score + stop score produce a joint distribution over [expand_0, …, STOP].
+
+---
+
+## Head-to-Head Comparison
+
+| Property | CLARE | SLRL |
+|---|---|---|
+| Encoder | GIN (2 layers, hidden=64) | Linear (degree only) |
+| Parameters | ~45k | ~8k |
+| Training episodes (typical) | 2000 | 500 |
+| Inference per query | ~12ms | ~1ms |
+| F1 on SNAP DBLP (approx.) | 0.71 | 0.68 |
+| Overlap-community support | ✗ | ✗ |
+| Inductive (unseen graphs) | ✓ | ✓ |
+
+**Key insight**: SLRL achieves ~96% of CLARE's F1 at 12× lower inference cost.
+For large graphs where inference latency matters, SLRL is the better choice.
+
+---
+
+## Code Comparison
+
+```python
+# CLARE
+from rlgb.algos.community.clare import CLAREAlgo, CLAREConfig
+clare = CLAREAlgo(CLAREConfig(hidden=64, n_layers=2))
+
+# SLRL
+from rlgb.algos.community.slrl import SLRLAlgo
+slrl = SLRLAlgo()  # no config needed for default
+
+# Both use the same CommunityEnv
+from rlgb.envs.community_env import CommunityEnv
+from rlgb.tasks.community_expand import CommunityExpandTask
+task = CommunityExpandTask(objective="f1")
+env  = CommunityEnv(task=task, problem=prob, horizon=15)
+```
+
+---
+
+## When to Use Which
+
+- **CLARE**: when F1 quality is paramount and compute is available; train once,
+  serve repeatedly on fixed graph.
+- **SLRL**: when real-time per-query latency matters, or when the graph is
+  too large to afford GNN encoding.
+
+---
+
+[← NeuroCUT](02-neurocut.qmd) | [AC2CD dynamic →](04-dynamic.qmd)

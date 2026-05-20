@@ -1,0 +1,136 @@
+---
+title: "RL for Graph Clustering: A 2022–2026 Landscape"
+author: "RL Graph Bench Contributors"
+date: "2025-06-01"
+categories: [survey, landscape, RL, graph-clustering]
+description: |
+  A structured taxonomy of reinforcement-learning approaches to graph
+  clustering, covering graph partitioning, semi-supervised community
+  expansion, and dynamic community detection — from 2022 to 2026.
+image: figures/landscape-cover.png
+---
+
+## Introduction
+
+Graph clustering — partitioning nodes into cohesive groups — sits at the
+intersection of combinatorial optimisation, network science, and machine
+learning. Classical solvers (Leiden, METIS, Louvain) are fast but
+handcraft their objective. Deep-learning approaches (DiffPool, MinCutPool)
+learn soft assignments but lack explicit search.
+
+**Reinforcement learning** offers a third path: an agent *searches* the
+partition space guided by a reward signal, learning heuristics that
+generalise across graph families. Over the last four years, a cluster of
+papers has emerged — each tackling a different sub-problem with a different
+RL flavour.
+
+This post builds a unified taxonomy.
+
+---
+
+## Taxonomy of Tasks
+
+We identify three core task types:
+
+### 1. Graph Partitioning (fixed-k)
+
+Given a graph $G = (V, E)$ and a target cluster count $k$, minimise a
+cut-based objective:
+
+$$
+\text{NCut}(V_1, \ldots, V_k) = \sum_{i=1}^{k} \frac{\text{cut}(V_i, \bar V_i)}{\text{vol}(V_i)}
+$$
+
+or the **structural entropy** $H^2$ (Li & Pan 2016):
+
+$$
+H^2 = -\sum_{i=1}^{k} \frac{g_i}{2|E|} \log \frac{v_i}{2|E|}
+$$
+
+where $g_i$ = cut edges of cluster $i$, $v_i$ = volume.
+
+**RL methods**: NeuroCUT (node-move), WRT (merge/split), SS2V-D3QN (edge-contraction).
+
+### 2. Semi-Supervised Community Expansion
+
+Given seed nodes for each community, expand to their full membership.
+Primary metric: **F1** against ground-truth communities.
+
+**RL methods**: CLARE (GIN + Exclude/Expand/Stop), SLRL (linear seed-RL).
+
+### 3. Dynamic Community Detection
+
+The graph changes over time as edge snapshots $G_1, G_2, \ldots, G_T$.
+The agent tracks community drift. Primary metric: **modularity density**
+(Li 2008) averaged over time.
+
+**RL methods**: AC2CD (GAT + A2C on snapshots).
+
+---
+
+## Taxonomy of Algorithms
+
+We identify five algorithm families:
+
+| Family | Rep. Methods | State | Action | Update |
+|---|---|---|---|---|
+| **NodeMove** | NeuroCUT | node feats (GraphSAGE) | move node to cluster $c$ | REINFORCE |
+| **Structured** | WRT | cluster embeddings (Transformer) | merge/split cluster pair | PPO |
+| **CommunityRW** | CLARE, SLRL | seed + boundary feats | exclude / expand / stop | REINFORCE |
+| **DynamicAC** | AC2CD | snapshot node feats (GAT) | node-move per snapshot | A2C |
+| **Multicut** | SS2V-D3QN | subgraph state (SAGE) | contract edge | Dueling D3QN |
+
+---
+
+## Evolution Timeline
+
+```
+2022  CLARE ─── GIN + REINFORCE community expansion ───────────────────
+2023  AC2CD ─── GAT + A2C temporal graphs ──────────────────────────────
+2024  NeuroCUT ─ GraphSAGE + REINFORCE fixed-k partitioning ────────────
+2025  WRT ────── Transformer + PPO merge/split ──────────────────────────
+      SLRL ───── Seed-level linear RL ────────────────────────────────────
+      SS2V-D3QN ─ Dense SAGE + Dueling DQN edge contraction ──────────────
+```
+
+---
+
+## Shared Design Patterns
+
+Despite different methods and tasks, every paper follows the same skeleton:
+
+1. **State**: Node or cluster embeddings from a GNN (SAGE, GIN, GAT, Transformer).
+2. **Action**: A discrete graph edit (move, merge, split, expand, contract).
+3. **Reward**: Negative Δ-objective (positive when quality improves).
+4. **Policy**: Stochastic (REINFORCE / A2C) or deterministic (DQN).
+5. **Generalisation**: Train on synthetic graphs; eval on real-world benchmarks.
+
+The **RL Graph Bench** framework codifies this pattern:
+
+```python
+task    = GraphPartitionTask(objective="h2")
+algo    = NeuroCUTAlgo(hidden=64)
+trainer = Trainer(algo=algo, env_fn=env_fn, config=TrainConfig(n_episodes=500))
+trainer.train()
+df      = trainer.eval()
+```
+
+---
+
+## Open Challenges
+
+- **Scalability**: All current methods struggle beyond ~10,000 nodes.
+- **Inductive transfer**: Most train on synthetic SBMs; real-graph generalisation is weak.
+- **Multi-objective**: Optimising cut quality *and* temporal stability simultaneously remains unsolved.
+- **Reproducibility**: No unified benchmark existed before this project.
+
+---
+
+## What's Next
+
+The next four posts in this series dive deep into each algorithm family:
+
+- [NeuroCUT deep dive →](02-neurocut.qmd)
+- [CLARE vs SLRL →](03-community.qmd)
+- [AC2CD temporal graphs →](04-dynamic.qmd)
+- [Benchmark design →](05-benchmark.qmd)
