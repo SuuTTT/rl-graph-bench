@@ -120,9 +120,11 @@ def compare_algos(
     task: ClusteringTask,
     n_seeds: int = 3,
     horizon: int = 10,
+    eval_kwargs: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Run eval_algo_on_suite for each algo and concatenate results."""
-    dfs = [eval_algo_on_suite(a, suite, task, n_seeds=n_seeds, horizon=horizon)
+    kwargs = eval_kwargs or {}
+    dfs = [eval_algo_on_suite(a, suite, task, n_seeds=n_seeds, horizon=horizon, **kwargs)
            for a in algos]
     return pd.concat(dfs, ignore_index=True)
 

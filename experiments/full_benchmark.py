@@ -52,19 +52,35 @@ def parse_args():
 
 # ── Training helpers ──────────────────────────────────────────────────────────
 
-def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int):
+def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
+                    curriculum: bool = False):
     from rlgb.algos.node_move.neurocut import NeuroCUTAlgo, NeuroCUTConfig
     from rlgb.training.trainer import Trainer, TrainConfig
     rng = random.Random(seed)
     algo = NeuroCUTAlgo(NeuroCUTConfig(hidden=hidden))
-    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
-    trainer = Trainer(
-        algo=algo, env_fn=env_fn,
-        config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
-                           n_episode_per_update=4, log_every=n_episodes // 5 + 1,
-                           save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
-    )
-    trainer.train()
+
+    if curriculum and n_episodes >= 500:
+        # Phase 1: random warm-start (learn to improve from scratch)
+        n1 = n_episodes * 2 // 3
+        env_fn1 = lambda: task.build_env(rng.choice(suite), horizon=horizon, warm_start='random')
+        Trainer(algo=algo, env_fn=env_fn1,
+                config=TrainConfig(n_episodes=n1, horizon=horizon, lr=3e-4,
+                                   n_episode_per_update=8, log_every=n1 // 5 + 1,
+                                   save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
+        # Phase 2: leiden warm-start fine-tune (refine near-optimal)
+        n2 = n_episodes - n1
+        rng2 = random.Random(seed + 1)
+        env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='leiden')
+        Trainer(algo=algo, env_fn=env_fn2,
+                config=TrainConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
+                                   n_episode_per_update=8, log_every=n2 // 5 + 1,
+                                   save_every=0, out_dir="/tmp/bench_ckpts", seed=seed + 1)).train()
+    else:
+        env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
+        Trainer(algo=algo, env_fn=env_fn,
+                config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
+                                   n_episode_per_update=4, log_every=n_episodes // 5 + 1,
+                                   save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
     return algo
 
 
@@ -168,7 +184,8 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
 
     t0 = time.perf_counter()
     print("[1/6] Training NeuroCUT …")
-    neurocut = _train_neurocut(suite, task, n_ep, hid, horizon, seed=42)
+    neurocut = _train_neurocut(suite, task, n_ep, hid, horizon, seed=42,
+                                curriculum=not quick)
     print(f"      done in {time.perf_counter()-t0:.1f}s")
 
     t1 = time.perf_counter()
@@ -185,7 +202,13 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
              SpectralBaseline(), RandomBaseline()]
 
     print(f"\n[4/6] Evaluating {len(algos)} algos × {len(suite)} graphs × {seeds} seeds …")
-    df = compare_algos(algos, suite, task, n_seeds=seeds, horizon=horizon)
+    best_n = 1 if quick else 10  # best-of-N stochastic rollouts for RL algos
+    rl_algos  = [neurocut, wrt, ss2v]
+    cls_algos = [LeidenBaseline(), LouvainBaseline(), SpectralBaseline(), RandomBaseline()]
+    df_rl  = compare_algos(rl_algos,  suite, task, n_seeds=seeds, horizon=horizon,
+                            eval_kwargs={"greedy": False, "best_of": best_n})
+    df_cls = compare_algos(cls_algos, suite, task, n_seeds=seeds, horizon=horizon)
+    df = pd.concat([df_rl, df_cls], ignore_index=True)
     df["benchmark"] = "partition"
     return df
 
