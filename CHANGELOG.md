@@ -17,9 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | NeuroCUT | Shah et al., KDD 2024 | [2310.11787](https://arxiv.org/abs/2310.11787) | Sparsest Cut ↓ | **1.46** | Cora k=5 | DMon=1.89 (−23%) |
 | WRT (RidgeCut) | Jiang et al., 2025 | [2505.13986](https://arxiv.org/abs/2505.13986) | NCut ↓ | **0.060** | City Traffic k=4 n=100 | NeuroCUT=0.078 (−23%) |
 | CLARE | Wu et al., KDD 2022 | [2210.08274](https://arxiv.org/abs/2210.08274) | F1 ↑ | SOTA | SNAP DBLP/Amazon/LJ | prior methods |
-| SLRL | *(no paper found)* | — | F1 ↑ | near-CLARE | SNAP DBLP | CLARE |
-| AC2CD | *(no paper found)* | — | NCut ↓ | beat static | temporal snapshots | static baseline |
-| SS2V-D3QN | *(no paper found)* | — | Multicut ↓ | near-optimal | Cora/CiteSeer small | brute-force |
+| SLRL | Ni et al., AAAI 2025 | *(no arXiv)* | F-score ↑ | **0.878** (Amazon), **0.662** (DBLP) | SNAP Amazon/DBLP | SEAL=0.839, CLARE=0.795 |
+| AC2CD | Costa & Ralha, KBS 2023 | [2111.15623](https://arxiv.org/abs/2111.15623) | NMI ↑ | **0.75** (BlogCatalog3) | Email-EU-Core, BlogCatalog3 | SDNE, GraphGAN, CLARE |
+| SS2V-D3QN | Li et al., TNNLS 2025 | *(no arXiv)* | Multicut ↓ | TBD (TNNLS paper) | synthetic + real multicut | TBD |
 
 - [ ] **Close paper gap** — NeuroCUT currently 2.9% behind Spectral (NCut 0.417 vs 0.406 on mini5).  
       Paper target: −18% vs Spectral (NCut ≤ 0.333). Needs ~5k ep + larger training graphs.

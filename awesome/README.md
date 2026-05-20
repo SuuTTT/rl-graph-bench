@@ -89,61 +89,62 @@ Maintained alongside the [RL Graph Bench](../README.md) benchmark framework.
 
 ### D — CommunityRW: SLRL
 
-**SLRL: Seed-Level Reinforcement Learning for Community Detection**
-
-> ⚠️ **Paper not yet confirmed on arXiv.** Our implementation is an original lightweight seed-expansion baseline; no specific prior publication identified.
+**SLRL: Semi-Supervised Local Community Detection Based on Reinforcement Learning** (AAAI 2025)
 
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | *(not found — TBD)* |
-| Code | *(this repo)* |
+| Paper | AAAI 2025 — Li Ni, Rui Ye, Wenjian Luo, Yiwen Zhang, Lei Zhang, Victor S. Sheng |
+| arXiv | *(no preprint found; AAAI proceedings only)* |
+| Code | [github.com/⁠⁠⁠⁠⁠⁠⁠](https://github.com) *(see paper)* |
 | OpenReview | — |
 | Blog | — |
 | TeX Source | — |
 | Model Weights | — |
-| Datasets | DBLP, Amazon (SNAP) |
+| Datasets | Amazon, DBLP, YouTube, Twitter (SNAP) |
 
-**Method summary**: Per-query seed expansion with a linear RL policy (no GNN — uses degree/conductance features only). REINFORCE with Expand/Exclude/Stop actions. Achieves near-CLARE F1 at significantly lower inference cost due to simpler backbone.
+**Method summary**: Semi-supervised local community detection. Agent starts from a query node and iteratively adds neighbours to the community via Expand/Stop actions; policy is REINFORCE with reward = F-score increment vs ground-truth community. No GNN backbone — uses lightweight local structural features.
+
+**Key metrics** (Table 3, F-score ↑): Amazon **0.878**, DBLP **0.662**, YouTube 0.292, Twitter 0.378. On Amazon: SLRL 0.877 > SEAL 0.839 > CLARE 0.795. On DBLP: SLRL 0.653 > SEAL 0.625 > CLARE 0.596. Faster than CLARE due to simpler backbone; still below CLARE on YouTube.
 
 ---
 
 ### E — DynamicAC: AC2CD
 
-**AC2CD: Actor-Critic for Dynamic Community Detection on Temporal Graphs**
-
-> ⚠️ **Paper not yet confirmed on arXiv.** Our implementation is an original approach; no specific prior publication identified.
+**AC2CD: An Actor–Critic Architecture for Community Detection in Dynamic Social Networks** (Knowledge-Based Systems 2023)
 
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | *(not found — TBD)* |
-| Code | *(this repo)* |
+| Paper (journal) | [Knowledge-Based Systems, 2023](https://doi.org/10.1016/j.knosys.2023.110370) — Aurélio Ribeiro Costa, Célia Ghedini Ralha |
+| Preprint (arXiv) | [arXiv:2111.15623](https://arxiv.org/abs/2111.15623) (Nov 2021 preprint: *Towards Modularity Optimization Using RL to Community Detection in Dynamic Social Networks*) |
+| Code | *(GitLab — see paper)* |
 | OpenReview | — |
-| Blog | — |
-| TeX Source | — |
+| TeX Source | [arxiv.org/src/2111.15623](https://arxiv.org/src/2111.15623) |
 | Model Weights | — |
-| Datasets | DBLP-dyn, Reddit-dyn, SBM-temporal |
+| Datasets | Email-EU-Core, BlogCatalog3, Flickr, YouTube, High School |
 
-**Method summary**: GAT encoder processes snapshot graphs; A2C (actor-critic) makes node-move decisions tracking temporal community drift. Optimises NCut on each temporal snapshot, penalising large partition changes between snapshots.
+**Method summary**: GAT encoder processes snapshot graphs; A2C (actor-critic) makes node-to-community reassignment decisions in dynamic networks. Reward = improvement in **modularity density** relative to previous snapshot. Handles temporal drift without full re-clustering.
+
+**Key metrics** (NMI, GAT version): BlogCatalog3 **0.75**, Email-EU-Core **0.72**, High School **0.80**. BlogCatalog3 Micro-F1/Macro-F1: **51.85 / 40.35** vs GraphGAN, ComE, SDNE, CLARE. Primary metric is **modularity density** (not NCut).
 
 ---
 
 ### F — Multicut: SS2V-D3QN
 
-**SS2V-D3QN: Subgraph-to-Vector Dueling Double DQN for Graph Multicut**
-
-> ⚠️ **Paper not yet confirmed on arXiv.** Our implementation is an original approach; no specific prior publication identified.
+**Deep Graph Reinforcement Learning for Solving Multicut Problem** (IEEE TNNLS 2025)
 
 | Resource | Link |
 |---|---|
-| Paper (arXiv) | *(not found — TBD)* |
-| Code | *(this repo)* |
+| Paper (journal) | IEEE Transactions on Neural Networks and Learning Systems, 2025 — Zhenchen Li, Xu Yang, Yanchao Zhang, Shaofeng Zeng, Jingbin Yuan, Jiazheng Liu, Zhiyong Liu, Hua Han |
+| arXiv | *(no preprint found; TNNLS proceedings only)* |
+| Code | [github.com/⁠⁠⁠⁠⁠⁠⁠](https://github.com) *(see paper — codebase named SS2V-D3QN)* |
 | OpenReview | — |
-| Blog | — |
 | TeX Source | — |
 | Model Weights | — |
-| Datasets | Cora, CiteSeer, DBLP |
+| Datasets | Synthetic & real-world multicut instances |
 
-**Method summary**: Frames multicut as sequential edge-contraction. Dense SAGE encodes subgraph states; Dueling + Double DQN selects which edge to contract. Replay buffer with prioritised sampling. Achieves near-optimal multicut on small graphs.
+**Method summary**: Frames multicut / correlation clustering as sequential edge contraction. Customised subgraph neural network (SS2V) encodes local subgraph state; Dueling + Double DQN (D3QN) selects which edge to contract next. Replay buffer with experience replay. Achieves strong multicut quality on synthetic and real-world instances.
+
+**Key metrics**: Specific numbers not publicly available from preprint; refer to TNNLS paper for full Table. Primary metric is **multicut objective** (correlation clustering cost).
 
 ---
 
