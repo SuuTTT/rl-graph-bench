@@ -189,8 +189,16 @@ class NeuroCUTPolicy(nn.Module):
         k_override: int | None = None,  # use this k instead of labels.max()+1
     ) -> tuple[torch.Tensor, torch.Tensor]:
         N = adj.shape[0]
-        # Use k_override to handle empty clusters (e.g. random warm-start)
-        k = k_override if k_override is not None else int(labels.max().item()) + 1
+        # Use k_override to handle empty clusters (e.g. random warm-start).
+        # Also guard against candidates that reference cluster indices beyond
+        # labels.max()+1 (can happen when randint draws fewer unique labels).
+        if k_override is not None:
+            k = k_override
+        else:
+            k_from_labels = int(labels.max().item()) + 1
+            k_from_cands  = (int(candidates[:, 1].max().item()) + 1
+                             if candidates.shape[0] > 0 else 0)
+            k = max(k_from_labels, k_from_cands)
 
         # Node embeddings
         h = self.encoder(node_feats, adj)  # (N, hidden)
