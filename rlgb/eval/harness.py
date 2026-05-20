@@ -69,7 +69,13 @@ def eval_algo_on_suite(
                     break
             elapsed = time.perf_counter() - start
 
-            labels = obs["labels"].astype(np.int64)
+            # Classical baselines may store their full partition directly
+            # (bypassing the env's step-by-step label tracking).
+            cached = getattr(algo, "_cached_labels", None)
+            if cached is not None and len(cached) == prob.adj.shape[0]:
+                labels = cached.astype(np.int64)
+            else:
+                labels = obs["labels"].astype(np.int64)
             metrics = compute_all(prob.adj, labels, prob.gt_labels)
             metrics["problem"] = prob.name
             metrics["seed"] = seed

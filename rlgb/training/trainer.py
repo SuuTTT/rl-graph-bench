@@ -127,8 +127,8 @@ class Trainer:
             if ep % self.cfg.log_every == 0:
                 self._log(ep, metrics, t_start)
 
-            # Checkpointing
-            if ep % self.cfg.save_every == 0:
+            # Checkpointing (save_every=0 disables mid-training saves)
+            if self.cfg.save_every > 0 and ep % self.cfg.save_every == 0:
                 self.algo.save(self._out / "last.pt")
 
         env.close()

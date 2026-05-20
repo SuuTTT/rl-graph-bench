@@ -59,6 +59,10 @@ def _get_algo(algo: str, hidden: int = 64, device: str = "cpu"):
     if algo in ("ss2v", "ss2v_d3qn"):
         from rlgb.algos.multicut.ss2v_d3qn import SS2VAlgo, SS2VConfig
         return SS2VAlgo(SS2VConfig(hidden=hidden, device=device))
+    # Classical baselines
+    if algo in ("leiden", "louvain", "spectral", "random", "metis"):
+        from rlgb.baselines.clustering import get_baseline
+        return get_baseline(algo)
     raise typer.BadParameter(f"Unknown algo '{algo}'. Run `rlgb list-algos` for options.")
 
 
@@ -219,6 +223,11 @@ def list_algos() -> None:
         ("ac2cd",    "dynamic",    "GAT + Actor-Critic on temporal snapshots"),
         ("wrt",      "partition",  "Cluster-level Transformer + PPO merge/split"),
         ("ss2v_d3qn","partition",  "DenseSAGE + Dueling Double DQN"),
+        # Classical baselines
+        ("leiden",   "partition",  "[baseline] Leiden modularity (leidenalg)"),
+        ("louvain",  "partition",  "[baseline] Louvain community_multilevel (igraph)"),
+        ("spectral", "partition",  "[baseline] Spectral Clustering (sklearn)"),
+        ("random",   "partition",  "[baseline] Random partition (lower bound)"),
     ]
     header = f"{'ALGO':<14}{'TASK':<14}DESCRIPTION"
     typer.echo(header)

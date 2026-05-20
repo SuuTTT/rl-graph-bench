@@ -42,6 +42,8 @@ Thumbs.db
 results/*.pkl
 results/*.pt
 results/*.pth
+results/*.jsonl
+results/eval_*.csv
 
 # Quarto build output
 blog/_site/

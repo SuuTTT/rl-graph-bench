@@ -186,9 +186,11 @@ class NeuroCUTPolicy(nn.Module):
         node_feats: torch.Tensor,    # (N, F) float32
         labels: torch.Tensor,        # (N,) int64
         candidates: torch.Tensor,    # (M, 2) int64
+        k_override: int | None = None,  # use this k instead of labels.max()+1
     ) -> tuple[torch.Tensor, torch.Tensor]:
         N = adj.shape[0]
-        k = int(labels.max().item()) + 1
+        # Use k_override to handle empty clusters (e.g. random warm-start)
+        k = k_override if k_override is not None else int(labels.max().item()) + 1
 
         # Node embeddings
         h = self.encoder(node_feats, adj)  # (N, hidden)

@@ -118,6 +118,7 @@ class NeuroCUTAlgo(RLAgent):
         adj_t    = torch.tensor(obs["adj"],        dtype=torch.float32, device=self._device)
         feats_t  = torch.tensor(obs["node_feats"], dtype=torch.float32, device=self._device)
         labels_t = torch.tensor(obs["labels"],     dtype=torch.long,    device=self._device)
+        k_target = max(int(labels_t.max().item()) + 1, int(round(float(obs["k"][0]))))
 
         # Extract actual candidates (exclude zero-padded rows)
         n_cands  = int(obs.get("n_candidates", [obs["candidates"].shape[0]])[0])
@@ -128,11 +129,11 @@ class NeuroCUTAlgo(RLAgent):
 
         if greedy:
             with torch.no_grad():
-                logits, _ = self._policy(adj_t, feats_t, labels_t, cands_t)
+                logits, _ = self._policy(adj_t, feats_t, labels_t, cands_t, k_override=k_target)
             idx = int(logits.argmax().item())
         else:
             self._policy.train()
-            logits, value = self._policy(adj_t, feats_t, labels_t, cands_t)
+            logits, value = self._policy(adj_t, feats_t, labels_t, cands_t, k_override=k_target)
             dist = torch.distributions.Categorical(logits=logits)
             idx_t = dist.sample()
             self._ep_log_probs.append(dist.log_prob(idx_t))
@@ -141,14 +142,8 @@ class NeuroCUTAlgo(RLAgent):
             idx = int(idx_t.item())
 
         # Convert candidate index → flat action index (node * K + cluster)
-        k = self._policy.cfg.hidden   # wrong; we need k from obs
-        # Actually encode as flat in candidates array; return candidate row idx
-        # The env decodes action as: candidates[idx] = (node, cluster)
-        # We store as flat action = node * K + cluster for the env
         node_idx, clust_idx = int(cands_np[idx, 0]), int(cands_np[idx, 1])
-        # Need K from labels max + 1
-        k = int(labels_t.max().item()) + 1
-        flat_action = node_idx * k + clust_idx
+        flat_action = node_idx * k_target + clust_idx
         return flat_action
 
     def push_transition(self, t: Transition) -> None:
