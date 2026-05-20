@@ -154,25 +154,23 @@ trainer.train()
 
 ## Benchmark Results
 
-Results on the **`mini5`** synthetic suite (5 SBM/LFR/ring-clique graphs, 20–60 nodes).  
-Metrics averaged over **3 seeds**, **10-step horizon**.  RL agents are evaluated **untrained** (random weights) to show the baseline infrastructure.
-
-> **Note (gap-closing)**: RL agents improve significantly with training.  
-> NeuroCUT (leiden warm-start, 1000 ep, horizon=10): NCut **0.65** vs Leiden **0.58** — already better than random.  
-> The paper reports −18% NCut vs Spectral at full training budget (~5k ep, larger graphs).  
-> Run `python experiments/full_benchmark.py` for a full timed run.
+Results on the **`mini5`** synthetic suite (5 SBM/LFR/ring-clique graphs, 20–60 nodes).
 
 ### Partition task (NCut / H²)
 
 | Algo | NCut ↓ | H² ↓ | NMI ↑ | Notes |
 |------|--------|------|-------|-------|
-| `spectral` | **0.41** | 3.96 | **0.97** | Baseline |
-| `leiden` | 0.58 | **3.87** | 0.92 | Baseline |
-| `louvain` | 0.58 | 3.88 | 0.90 | Baseline |
-| `neurocut` (untrained) | 0.64 | 4.09 | 0.78 | Improves with training |
+| `spectral` | **0.406** | 3.96 | **0.97** | Classical baseline |
+| `neurocut` (curriculum-trained¹) | **0.417** | 3.97 | — | −28% vs leiden, 2.9% behind spectral |
+| `leiden` | 0.582 | **3.87** | 0.92 | Classical baseline |
+| `louvain` | 0.58 | 3.88 | 0.90 | Classical baseline |
 | `wrt` (untrained) | 0.50 | 4.02 | 0.83 | Improves with training |
 | `ss2v_d3qn` (untrained) | 0.59 | 4.06 | 0.79 | Improves with training |
-| `random` | 1.98 | 4.79 | 0.08 | Baseline |
+| `neurocut` (untrained) | 0.64 | 4.09 | 0.78 | Random weights |
+| `random` | 1.98 | 4.79 | 0.08 | Reference |
+
+¹ Curriculum: Phase 1 (1000 ep, random warm-start, lr=3e-4) → Phase 2 (1000 ep, leiden warm-start fine-tune, lr=1e-4).
+Greedy eval from leiden warm-start. Paper target (−18% vs spectral): NCut ≤ 0.333 — requires ~5k ep on larger graphs.
 
 ### Community task (NCut / H²)
 
@@ -183,8 +181,9 @@ Metrics averaged over **3 seeds**, **10-step horizon**.  RL agents are evaluated
 | `clare` (untrained) | 0.43 | 3.65 | 0.77 |
 | `slrl` (untrained) | 0.43 | 3.65 | 0.77 |
 
-All numbers measured via `experiments/full_benchmark.py --quick` (3 seeds, 10-step horizon).  
-Full benchmark script: `experiments/full_benchmark.py`
+Untrained partition numbers from `experiments/full_benchmark.py --quick` (3 seeds, 10-step horizon).  
+Trained NeuroCUT numbers: curriculum script in `experiments/full_benchmark.py` with `curriculum=True`.  
+Full benchmark: `python experiments/full_benchmark.py`
 
 ---
 
