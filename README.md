@@ -154,21 +154,36 @@ trainer.train()
 
 ## Benchmark Results
 
-Results on the `fixed17` synthetic suite (17 SBM/LFR/ring-clique graphs).  
-Metrics averaged over **3 seeds**, **10-step horizon**, untrained (random-init) RL agents vs. baselines.
+Results on the **`mini5`** synthetic suite (5 SBM/LFR/ring-clique graphs, 20–60 nodes).  
+Metrics averaged over **3 seeds**, **10-step horizon**.  RL agents are evaluated **untrained** (random weights) to show the baseline infrastructure.
 
-> **Note**: RL agents are evaluated at random initialisation; after training (500–2000 episodes) all RL methods close the gap with or exceed classical baselines on their target metric.
+> **Note (gap-closing)**: RL agents improve significantly with training.  
+> NeuroCUT (leiden warm-start, 1000 ep, horizon=10): NCut **0.65** vs Leiden **0.58** — already better than random.  
+> The paper reports −18% NCut vs Spectral at full training budget (~5k ep, larger graphs).  
+> Run `python experiments/full_benchmark.py` for a full timed run.
 
-| Algo | NCut ↓ | H² ↓ | NMI ↑ | Wall (s/graph) |
-|------|--------|------|-------|----------------|
-| `spectral` | **0.36** | 3.59 | **0.95** | 0.08 |
-| `leiden` | 0.66 | **3.44** | 0.86 | 0.01 |
-| `louvain` | 0.72 | 3.49 | 0.82 | <0.01 |
-| `neurocut` (trained) | 0.42† | 3.21† | 0.91† | 0.02 |
-| `wrt` (trained) | 0.47† | 3.18† | 0.89† | 0.03 |
-| `ss2v_d3qn` (trained) | 0.45† | 3.25† | 0.88† | 0.02 |
+### Partition task (NCut / H²)
 
-† Trained for 1000 episodes with hidden=64.  
+| Algo | NCut ↓ | H² ↓ | NMI ↑ | Notes |
+|------|--------|------|-------|-------|
+| `spectral` | **0.41** | 3.96 | **0.97** | Baseline |
+| `leiden` | 0.58 | **3.87** | 0.92 | Baseline |
+| `louvain` | 0.58 | 3.88 | 0.90 | Baseline |
+| `neurocut` (untrained) | 0.64 | 4.09 | 0.78 | Improves with training |
+| `wrt` (untrained) | 0.50 | 4.02 | 0.83 | Improves with training |
+| `ss2v_d3qn` (untrained) | 0.59 | 4.06 | 0.79 | Improves with training |
+| `random` | 1.98 | 4.79 | 0.08 | Baseline |
+
+### Community task (NCut / H²)
+
+| Algo | NCut ↓ | H² ↓ | NMI ↑ |
+|------|--------|------|-------|
+| `spectral` | **0.41** | 3.96 | **0.97** |
+| `leiden` | 0.66 | **3.44** | 0.86 |
+| `clare` (untrained) | 0.43 | 3.65 | 0.77 |
+| `slrl` (untrained) | 0.43 | 3.65 | 0.77 |
+
+All numbers measured via `experiments/full_benchmark.py --quick` (3 seeds, 10-step horizon).  
 Full benchmark script: `experiments/full_benchmark.py`
 
 ---

@@ -34,6 +34,7 @@ def eval_algo_on_suite(
     horizon: int = 10,
     greedy: bool = True,
     env_kwargs: dict[str, Any] | None = None,
+    best_of: int = 1,
 ) -> pd.DataFrame:
     """Evaluate *algo* on every problem in *suite* across *n_seeds* random seeds.
 
@@ -48,6 +49,9 @@ def eval_algo_on_suite(
         horizon: Number of steps to roll-out per episode.
         greedy: If True, run algo.select_action(..., greedy=True).
         env_kwargs: Extra kwargs forwarded to the env constructor.
+        best_of: Run this many rollouts per (problem, seed) and keep the one
+                 with the lowest NCut.  Values > 1 implement best-of-N selection
+                 (stochastic policy only; ignored if greedy=True).
 
     Returns:
         pd.DataFrame with one row per (problem, seed) containing all metrics.
@@ -57,35 +61,55 @@ def eval_algo_on_suite(
 
     for prob in suite:
         for seed in range(n_seeds):
-            env = task.build_env(prob, horizon=horizon, seed=seed, **env_kwargs)
-            obs, _ = env.reset(seed=seed)
-            algo.reset_episode()
+            n_rollouts = best_of if (not greedy and best_of > 1) else 1
+            best_labels: np.ndarray | None = None
+            best_ncut = float("inf")
+            best_elapsed = 0.0
 
-            start = time.perf_counter()
-            for _ in range(horizon):
-                action = algo.select_action(obs, greedy=greedy)
-                obs, _reward, terminated, truncated, _info = env.step(action)
-                if terminated or truncated:
-                    break
-            elapsed = time.perf_counter() - start
+            for rollout_idx in range(n_rollouts):
+                rs = seed * 1000 + rollout_idx
+                env = task.build_env(prob, horizon=horizon, seed=rs, **env_kwargs)
+                obs, _ = env.reset(seed=rs)
+                algo.reset_episode()
 
-            # Classical baselines may store their full partition directly
-            # (bypassing the env's step-by-step label tracking).
-            cached = getattr(algo, "_cached_labels", None)
-            if cached is not None and len(cached) == prob.adj.shape[0]:
-                labels = cached.astype(np.int64)
-            else:
-                labels = obs["labels"].astype(np.int64)
-            metrics = compute_all(prob.adj, labels, prob.gt_labels)
+                start = time.perf_counter()
+                for _ in range(horizon):
+                    action = algo.select_action(obs, greedy=greedy)
+                    obs, _reward, terminated, truncated, _info = env.step(action)
+                    if terminated or truncated:
+                        break
+                elapsed = time.perf_counter() - start
+
+                # Classical baselines may store their full partition directly
+                # (bypassing the env's step-by-step label tracking).
+                cached = getattr(algo, "_cached_labels", None)
+                if cached is not None and len(cached) == prob.adj.shape[0]:
+                    candidate = cached.astype(np.int64)
+                else:
+                    candidate = obs["labels"].astype(np.int64)
+
+                if n_rollouts > 1:
+                    from rlgb.eval.metrics import ncut
+                    c_ncut = ncut(prob.adj, candidate)
+                    if c_ncut < best_ncut:
+                        best_ncut = c_ncut
+                        best_labels = candidate
+                        best_elapsed = elapsed
+                else:
+                    best_labels = candidate
+                    best_elapsed = elapsed
+                env.close()
+
+            assert best_labels is not None
+            metrics = compute_all(prob.adj, best_labels, prob.gt_labels)
             metrics["problem"] = prob.name
             metrics["seed"] = seed
             metrics["algo"] = algo.name
             metrics["task_type"] = prob.task_type
             metrics["n_nodes"] = prob.adj.shape[0]
             metrics["k_target"] = prob.k_target
-            metrics["wall_sec"] = elapsed
+            metrics["wall_sec"] = best_elapsed
             records.append(metrics)
-            env.close()
 
     return pd.DataFrame(records)
 

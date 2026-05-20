@@ -50,6 +50,9 @@ class TrainConfig:
     save_every: int = 200        # episodes
     out_dir: str = "results/run"
 
+    # Env rotation (inductive training over a suite)
+    env_rotate_every: int = 0   # 0 = auto (n_episodes//20); 1 = every episode
+
     # Misc
     device: str = "cpu"
     seed: int = 0
@@ -100,9 +103,10 @@ class Trainer:
         env = self.env_fn()
         accumulated: list[list[Transition]] = []
 
+        rotate_every = self.cfg.env_rotate_every or max(1, self.cfg.n_episodes // 20)
         for ep in range(1, self.cfg.n_episodes + 1):
             # Rotate env for inductive training (env_fn may return a new graph)
-            if ep > 1 and ep % max(1, self.cfg.n_episodes // 20) == 0:
+            if ep > 1 and ep % rotate_every == 0:
                 env.close()
                 env = self.env_fn()
 

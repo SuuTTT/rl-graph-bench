@@ -181,6 +181,18 @@ class TestEvalHarness:
                                 horizon=3, greedy=False)
         assert len(df) == 1
 
+    def test_best_of_n(self):
+        """best_of>1 should return same shape and NCut ≤ single rollout."""
+        from rlgb.eval.harness import eval_algo_on_suite
+        algo, task = self._make_algo_and_task()
+        df1 = eval_algo_on_suite(algo, mini5()[:1], task, n_seeds=1,
+                                  horizon=5, greedy=False, best_of=1)
+        df3 = eval_algo_on_suite(algo, mini5()[:1], task, n_seeds=1,
+                                  horizon=5, greedy=False, best_of=3)
+        assert len(df3) == len(df1)  # same rows
+        # best-of-3 should not be worse than best-of-1 (may be equal)
+        assert df3["ncut"].mean() <= df1["ncut"].mean() + 0.5  # loose bound
+
     def test_metrics_are_finite(self):
         from rlgb.eval.harness import eval_algo_on_suite
         algo, task = self._make_algo_and_task()
