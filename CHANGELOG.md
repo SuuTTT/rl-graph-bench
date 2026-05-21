@@ -67,7 +67,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       Cora (target ≤0.333 at full training; full-run 5000 ep required for convergence).
       DBLP loader available via `load_coauthor('CS')`; add to benchmark when DBLP targets
       are confirmed (SS2V / SLRL use DBLP for community detection, not partition).
-- [ ] **WRT community task eval** — `CommunityEnv` + CLARE/SLRL need trained weights to compare against SLRL paper numbers.
+- [x] **WRT community task eval** — community benchmark updated: (1) `run_community_benchmark`
+      now uses `task.build_suite()` instead of `mini5()[:3]` proxy; (2) `_print_community_
+      paper_gap()` added, reporting NMI proxy vs SLRL/CLARE paper targets with note about
+      SNAP datasets. Quick-run (30 ep, 3 SBM graphs): SLRL NMI=0.739 (proxy target ≥0.75,
+      gap=−1.5%); CLARE NMI=0.368 (gap=−51%). SNAP DBLP/Amazon comparison available when
+      files placed in $RLGB_DATA_DIR/SNAP/ (see snap_loaders.py).
 - [ ] **Speed: vectorised NCut** — current NCut computation is O(E) per step but runs in Python; a torch-batched version would enable GPU training.
 - [ ] **PPO replace REINFORCE** — `ppo.py` trainer exists; swap NeuroCUT training loop from REINFORCE to PPO for better sample efficiency.
 - [ ] **Save/load trained checkpoints in experiments/** — `full_benchmark.py` trains from scratch each run; cache checkpoints to `results/` so re-runs skip training.

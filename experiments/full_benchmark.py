@@ -248,8 +248,9 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
 def run_community_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame:
     """Community expansion: clare, slrl vs leiden (adapts objective)."""
     task = CommunityExpandTask(objective="h2")
-    # Use partition suite as a proxy (community env works on same graphs)
-    suite = mini5()[:3] if quick else fixed17()[:8]
+    # Use task's own suite (fixed17 community graphs) rather than partition proxy
+    base_suite = mini5() if quick else task.build_suite()
+    suite = base_suite[:3] if quick else base_suite
 
     n_ep = 30 if quick else 1000
     hid  = 32 if quick else 64
@@ -355,6 +356,8 @@ def main():
     # Paper-target gap analysis (partition only)
     if "partition" in all_df["benchmark"].values:
         _print_paper_gap(all_df[all_df["benchmark"] == "partition"])
+    if "community" in all_df["benchmark"].values:
+        _print_community_paper_gap(all_df[all_df["benchmark"] == "community"])
 
     summary_path = out_dir / "benchmark_v1_summary.txt"
     summary_path.write_text("\n".join(summary_lines))
@@ -397,6 +400,39 @@ def _print_paper_gap(df: pd.DataFrame) -> None:
                     cora_gap = 100 * (cora_actual - target) / (abs(target) + 1e-9)
                     cora_status = "✓ BEAT" if cora_actual <= target else f"△ gap={cora_gap:+.1f}%"
                     print(f"  {algo_name:<14} {metric}: actual={cora_actual:.4f} (Cora only)  target≤{target}  {cora_status}")
+
+
+def _print_community_paper_gap(df: pd.DataFrame) -> None:
+    """Print community benchmark results vs SLRL/CLARE paper targets.
+
+    Paper targets (SNAP datasets — not comparable to synthetic proxy):
+      SLRL (AAAI 2025): F-score 0.878 on SNAP Amazon, 0.662 on SNAP DBLP
+      CLARE (KDD 2022): SOTA on SNAP DBLP/Amazon/LJ (no single published number)
+    Note: NMI on synthetic SBM is reported as a proxy only.
+    """
+    print("\n── PAPER GAP ANALYSIS (community, NMI proxy) ──")
+    print("  NOTE: paper targets are on SNAP Amazon/DBLP (not loaded by default).")
+    print("        NMI on synthetic SBM shown as proxy. Place SNAP files in")
+    print("        $RLGB_DATA_DIR/SNAP/ to enable exact paper comparison.")
+    print()
+    # Paper targets (proxy NMI; SLRL paper reports F-score on SNAP, not NMI on SBM)
+    targets = {
+        "slrl":  {"nmi": 0.75, "note": "SLRL AAAI-2025: F≥0.878 Amazon, F≥0.662 DBLP"},
+        "clare": {"nmi": 0.75, "note": "CLARE KDD-2022: SOTA on SNAP DBLP/Amazon/LJ"},
+    }
+    for algo_name, info in targets.items():
+        sub = df[df["algo"] == algo_name]
+        if sub.empty:
+            continue
+        note = info.pop("note", "")
+        for metric, target in info.items():
+            if metric not in sub.columns:
+                continue
+            actual = sub[metric].mean()
+            gap_pct = 100 * (actual - target) / (abs(target) + 1e-9)
+            status = "✓ BEAT (proxy)" if actual >= target else f"△ gap={gap_pct:+.1f}% (proxy)"
+            print(f"  {algo_name:<10} {metric}: actual={actual:.4f}  proxy_target≥{target}  {status}")
+            print(f"             ({note})")
 
 
 if __name__ == "__main__":
