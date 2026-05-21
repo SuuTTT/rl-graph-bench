@@ -48,6 +48,26 @@ class TestMetrics:
         val = self.ncut(self.adj, np.zeros(6, dtype=np.int32))
         assert val == 0.0
 
+    def test_ncut_torch_matches_numpy(self):
+        """ncut_torch must return value within 1e-3 of numpy ncut."""
+        import torch
+        from rlgb.eval.metrics import ncut_torch
+        adj_t = torch.tensor(self.adj, dtype=torch.float32)
+        lab_t = torch.tensor(self.labels, dtype=torch.long)
+        torch_val = ncut_torch(adj_t, lab_t).item()
+        numpy_val = self.ncut(self.adj, self.labels)
+        assert abs(torch_val - numpy_val) < 1e-3, (
+            f"torch={torch_val:.4f} numpy={numpy_val:.4f}"
+        )
+
+    def test_ncut_torch_single_cluster(self):
+        """ncut_torch: all-one-cluster → NCut≈0."""
+        import torch
+        from rlgb.eval.metrics import ncut_torch
+        adj_t = torch.tensor(self.adj, dtype=torch.float32)
+        lab_t = torch.zeros(6, dtype=torch.long)
+        assert ncut_torch(adj_t, lab_t).item() == pytest.approx(0.0, abs=1e-6)
+
     def test_h2_positive(self):
         val = self.h2(self.adj, self.labels)
         assert val > 0
