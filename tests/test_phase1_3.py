@@ -311,6 +311,27 @@ class TestNeuroCUTAlgo:
         assert trainer._ppo_mode, "PPOTrainer should detect PPO interface on NeuroCUTAlgo"
         trainer.train()   # must not raise
 
+    def test_ppo_cosine_lr_smoke(self):
+        """PPOConfig lr_schedule='cosine' completes without error."""
+        from rlgb.training.ppo import PPOTrainer, PPOConfig
+        from rlgb.tasks.graph_partition import GraphPartitionTask
+        from rlgb.data.synthetic import mini5
+        import random
+
+        algo = self._make_algo()
+        task = GraphPartitionTask(objective="ncut")
+        suite = mini5()[:2]
+        rng = random.Random(3)
+        env_fn = lambda: task.build_env(rng.choice(suite), horizon=3)
+
+        PPOTrainer(
+            algo=algo, env_fn=env_fn,
+            config=PPOConfig(n_episodes=8, horizon=3, log_every=8,
+                             save_every=0, out_dir="/tmp/test_ppo_cosine",
+                             n_episodes_per_update=4,
+                             lr_schedule="cosine", lr_min_ratio=0.1),
+        ).train()  # must not raise
+
 
 # ── Trainer end-to-end ────────────────────────────────────────────────────────
 
