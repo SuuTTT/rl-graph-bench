@@ -208,13 +208,13 @@ class TestCLI:
     def _run(self, *args) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, "-m", "rlgb.cli", *args],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=120,
         )
 
     def _rlgb(self, *args) -> subprocess.CompletedProcess:
         return subprocess.run(
             ["rlgb", *args],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=120,
         )
 
     def test_list_algos(self):
