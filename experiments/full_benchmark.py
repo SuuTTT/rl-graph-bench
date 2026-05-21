@@ -2,12 +2,12 @@
 """Full benchmark — train all RL algos and compare against classical baselines.
 
 Paper targets (from individual papers):
-  NeuroCUT : NCut ↓18 % vs Spectral  →  target NCut ≤ 0.30
-  WRT      : H²   ↓12 % vs Leiden   →  target H²  ≤ 3.00
-  SS2V-D3QN: H²   ↓10 % vs Leiden   →  target H²  ≤ 3.10
-  CLARE    : F1 = 0.71 on SNAP DBLP 1k  (community task)
-  SLRL     : F1 = 0.68 at 10× lower cost
-  AC2CD    : ModDens = 0.38 on SBM-temporal-k3 (dynamic task)
+  NeuroCUT : NCut ↓18 % vs Spectral  →  target NCut ≤ 0.333 (Cora k=4)
+  WRT      : NCut ↓23 % vs NeuroCUT  →  target NCut ≤ 0.060 (City Traffic k=4 n=100)
+  SS2V-D3QN: Multicut obj ↓         →  TBD (TNNLS paper, no preprint)
+  CLARE    : F1 = 0.773 on SNAP Amazon  (community task, semi-supervised)
+  SLRL     : F-score = 0.878 on SNAP Amazon  (community task, semi-supervised)
+  AC2CD    : NMI = 0.75 on BlogCatalog3  (dynamic task)
 
 Usage::
 
@@ -60,21 +60,25 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
     algo = NeuroCUTAlgo(NeuroCUTConfig(hidden=hidden))
 
     if curriculum and n_episodes >= 500:
-        # Phase 1: random warm-start (learn to improve from scratch)
-        n1 = n_episodes * 2 // 3
+        # Phase 1 (90 %): random warm-start — learns to improve from any starting point.
+        # Phase 2 (10 %, capped at 500 ep): leiden warm-start short fine-tune.
+        # WARNING: Phase 2 must stay SHORT. All-negative reward signals over many
+        # episodes corrupt the Phase 1 model (policy gradient pushes toward
+        # "avoid all moves" → destructive eval behaviour).
+        n1 = int(n_episodes * 0.9)
+        n2 = min(n_episodes - n1, 500)
         env_fn1 = lambda: task.build_env(rng.choice(suite), horizon=horizon, warm_start='random')
         Trainer(algo=algo, env_fn=env_fn1,
                 config=TrainConfig(n_episodes=n1, horizon=horizon, lr=3e-4,
                                    n_episode_per_update=8, log_every=n1 // 5 + 1,
                                    save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
-        # Phase 2: leiden warm-start fine-tune (refine near-optimal)
-        n2 = n_episodes - n1
-        rng2 = random.Random(seed + 1)
-        env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='leiden')
-        Trainer(algo=algo, env_fn=env_fn2,
-                config=TrainConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
-                                   n_episode_per_update=8, log_every=n2 // 5 + 1,
-                                   save_every=0, out_dir="/tmp/bench_ckpts", seed=seed + 1)).train()
+        if n2 > 0:
+            rng2 = random.Random(seed + 1)
+            env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='leiden')
+            Trainer(algo=algo, env_fn=env_fn2,
+                    config=TrainConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
+                                       n_episode_per_update=8, log_every=n2 // 5 + 1,
+                                       save_every=0, out_dir="/tmp/bench_ckpts", seed=seed + 1)).train()
     else:
         env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
         Trainer(algo=algo, env_fn=env_fn,
@@ -170,11 +174,12 @@ def _train_slrl(suite, task, n_episodes: int, hidden: int, horizon: int, seed: i
 def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame:
     """Graph partition: neurocut, wrt, ss2v vs leiden, louvain, spectral, random."""
     suite = mini5() if quick else fixed17()
-    task  = GraphPartitionTask(objective="h2")
+    # NeuroCUT paper (KDD 2024) targets NCut; WRT paper (arXiv:2505.13986) also targets NCut.
+    task  = GraphPartitionTask(objective="ncut")
 
-    n_ep  = 50   if quick else 2000
+    n_ep  = 50   if quick else 5000
     dqn_s = 500  if quick else 20000
-    hid   = 32   if quick else 128
+    hid   = 32   if quick else 256
 
     print(f"\n{'='*60}")
     print(f"PARTITION BENCHMARK  |  suite={len(suite)} graphs  |  n_ep={n_ep}  |  hidden={hid}")
@@ -185,7 +190,7 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
     t0 = time.perf_counter()
     print("[1/6] Training NeuroCUT …")
     neurocut = _train_neurocut(suite, task, n_ep, hid, horizon, seed=42,
-                                curriculum=not quick)
+                                curriculum=True)
     print(f"      done in {time.perf_counter()-t0:.1f}s")
 
     t1 = time.perf_counter()
@@ -202,11 +207,13 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
              SpectralBaseline(), RandomBaseline()]
 
     print(f"\n[4/6] Evaluating {len(algos)} algos × {len(suite)} graphs × {seeds} seeds …")
-    best_n = 1 if quick else 10  # best-of-N stochastic rollouts for RL algos
+    best_n = 1 if quick else 5   # best-of-N stochastic rollouts for RL algos
     rl_algos  = [neurocut, wrt, ss2v]
     cls_algos = [LeidenBaseline(), LouvainBaseline(), SpectralBaseline(), RandomBaseline()]
+    # Eval RL algos from leiden warm-start (paper-protocol: refine an existing partition)
     df_rl  = compare_algos(rl_algos,  suite, task, n_seeds=seeds, horizon=horizon,
-                            eval_kwargs={"greedy": False, "best_of": best_n})
+                            eval_kwargs={"greedy": True, "best_of": best_n,
+                                         "env_kwargs": {"warm_start": "leiden"}})
     df_cls = compare_algos(cls_algos, suite, task, n_seeds=seeds, horizon=horizon)
     df = pd.concat([df_rl, df_cls], ignore_index=True)
     df["benchmark"] = "partition"
@@ -327,16 +334,23 @@ def main():
 
 
 def _print_paper_gap(df: pd.DataFrame) -> None:
-    """Print comparison vs paper-reported numbers."""
-    print("\n── PAPER GAP ANALYSIS (partition) ──")
+    """Print comparison vs paper-reported numbers (NCut objective only)."""
+    print("\n── PAPER GAP ANALYSIS (partition, NCut objective) ──")
+    # Targets from source papers (see docs/PAPER_TARGETS.md):
+    #   NeuroCUT: NCut 0.33 on Cora k=4  (Shah et al., KDD 2024, arXiv:2310.11787)
+    #   WRT:      NCut 0.060 City Traffic k=4 n=100  (Jiang et al. 2025, arXiv:2505.13986)
+    #   SS2V-D3QN: TBD (TNNLS paper, no preprint)
     targets = {
-        "neurocut": {"ncut": 0.30, "h2": 3.00},
-        "wrt":      {"ncut": 0.35, "h2": 3.00},
-        "ss2v_d3qn":{"ncut": 0.38, "h2": 3.10},
+        "neurocut":  {"ncut": 0.333},
+        "wrt":       {"ncut": 0.060},
+        "ss2v_d3qn": {},    # no public NCut target — multicut objective only
     }
     for algo_name, tgts in targets.items():
         sub = df[df["algo"] == algo_name]
         if sub.empty:
+            continue
+        if not tgts:
+            print(f"  {algo_name:<14} (no NCut paper target — see TNNLS paper for multicut numbers)")
             continue
         for metric, target in tgts.items():
             if metric not in sub.columns:

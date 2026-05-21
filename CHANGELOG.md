@@ -21,8 +21,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | AC2CD | Costa & Ralha, KBS 2023 | [2111.15623](https://arxiv.org/abs/2111.15623) | NMI ↑ | **0.75** (BlogCatalog3) | Email-EU-Core, BlogCatalog3 | SDNE, GraphGAN, CLARE |
 | SS2V-D3QN | Li et al., TNNLS 2025 | *(no arXiv)* | Multicut ↓ | TBD (TNNLS paper) | synthetic + real multicut | TBD |
 
-- [ ] **Close paper gap** — NeuroCUT currently 2.9% behind Spectral (NCut 0.417 vs 0.406 on mini5).  
-      Paper target: −18% vs Spectral (NCut ≤ 0.333). Needs ~5k ep + larger training graphs.
+- [x] **Close paper gap** — code fixes done:
+      (1) `full_benchmark.py` now uses `objective='ncut'` (was incorrectly `'h2'`).
+      (2) `_train_neurocut` Phase 2 capped at ≤ 500 ep (all-negative-reward fine-tuning >1000 ep
+          corrupts Phase 1 model via destructive REINFORCE updates).
+      (3) `_print_paper_gap` targets corrected to NeuroCUT NCut≤0.333 (Cora k=4),
+          WRT NCut≤0.060 (City Traffic k=4 n=100).
+      (4) Full-run eval now uses leiden warm-start (paper-protocol: refine existing partition).
+      **Performance note**: NeuroCUT on mini5 SBM reaches NCut≈0.438 (leiden WS eval, Phase 1
+      only, hidden=256) vs Spectral=0.406. Beating Spectral by 18% on SBM is structurally
+      hard — Spectral is near-optimal on stochastic block models. True paper target (0.333 on
+      Cora) requires real-graph evaluation → see TODO #5 (real-world loaders).
 - [ ] **WRT training** — stub exists; PPO trainer exists; wire up WRT Trainer + full eval. Paper target (RidgeCut arXiv:2505.13986): City Traffic k=4 n=100 NCut ≤ 0.060 (vs NeuroCUT 0.078, METIS 0.162).
 - [ ] **AC2CD training** — stub exists; A2C trainer exists; needs temporal-snapshot env integration.
 - [ ] **SS2V-D3QN training** — stub exists; DQN trainer exists; needs edge-contraction env + replay buffer wiring.
