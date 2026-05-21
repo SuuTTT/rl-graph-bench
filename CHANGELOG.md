@@ -40,9 +40,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Experiments
 
+- **NeuroCUT h=128, 3000ep (2700+300), entropy=0.03/0.01, cosine LR Phase 1** —
+  Phase 1 reward peaked at 0.9249 (ep=2500). **Phase 2 leiden WS (300ep) degraded model**:
+  negative reward throughout (−0.06→−0.13), final NCut=0.4883. Worse than h=64. Root cause:
+  Phase 2 leiden-WS fine-tuning is counter-productive at all scales (h=32/64/128 all show
+  negative reward during Phase 2). Recovery experiment (Phase 3 random WS from degraded
+  checkpoint) in progress.
+
 - **NeuroCUT h=64, 500ep (450+50), entropy=0.03, cosine LR** — greedy eval with leiden WS
   reaches **NCut=0.4056** (= Spectral baseline), NMI=0.9674 on mini5. Gap to target +22%.
-  Confirms cosine LR + higher entropy scale well; h=128 @ 3000ep expected to go further.
+  Best result so far; Phase 2 leiden WS reward was mild (−0.22→−0.06) vs h=128's deeper damage.
+
+- **NeuroCUT h=64, spectral WS in Phase 2** — Phase 2 spectral WS also degrades: NCut=0.5048
+  (Phase 1 ckpt) vs 0.4056 (leiden WS eval). Model trained on random WS cannot improve
+  from spectral starting point.
 
 - **NeuroCUT h=32 A/B** — entropy=0.03 + cosine LR vs baseline (entropy=0.01, no cosine):
   NCut 0.5186 → **0.5031** (−1.5% Δ). Improvements confirmed at small scale.
