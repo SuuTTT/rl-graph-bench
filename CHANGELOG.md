@@ -32,7 +32,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       only, hidden=256) vs Spectral=0.406. Beating Spectral by 18% on SBM is structurally
       hard — Spectral is near-optimal on stochastic block models. True paper target (0.333 on
       Cora) requires real-graph evaluation → see TODO #5 (real-world loaders).
-- [ ] **WRT training** — stub exists; PPO trainer exists; wire up WRT Trainer + full eval. Paper target (RidgeCut arXiv:2505.13986): City Traffic k=4 n=100 NCut ≤ 0.060 (vs NeuroCUT 0.078, METIS 0.162).
+- [x] **WRT training** — `StructuredPartitionEnv` created (`rlgb/envs/structured_env.py`): action
+      space = merge adjacent cluster pair OR split a cluster. k_target constraint enforced in
+      `step()` (merge only when k > k_target; split only when k < k_target) to prevent trivial
+      NCut=0 collapse. `GraphPartitionTask.build_env(env_class='structured')` added. `_train_wrt`
+      updated to use `env_class='structured', warm_start='random'`. Partition benchmark eval now
+      calls WRT with `env_class='structured'` separately from NeuroCUT (NodeMoveEnv). Quick-run
+      result on mini5 SBM (50 ep): WRT NCut=0.448.
+      **Performance note**: paper target (NCut≤0.060) is on City Traffic graph (k=4, n=100
+      road-network topology) — requires a real-world loader (see TODO #5).
 - [ ] **AC2CD training** — stub exists; A2C trainer exists; needs temporal-snapshot env integration.
 - [ ] **SS2V-D3QN training** — stub exists; DQN trainer exists; needs edge-contraction env + replay buffer wiring.
 - [ ] **Real-world loaders** — `pyg_loaders.py` + `snap_loaders.py` exist but datasets are downloaded lazily; add Cora/CiteSeer/DBLP benchmarks to `full_benchmark.py`.

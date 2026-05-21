@@ -93,7 +93,9 @@ def _train_wrt(suite, task, n_episodes: int, hidden: int, horizon: int, seed: in
     from rlgb.training.ppo import PPOTrainer, PPOConfig
     rng = random.Random(seed)
     algo = WRTAlgo(WRTConfig(hidden=hidden))
-    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
+    # Use StructuredPartitionEnv so merge/split actions are decoded correctly
+    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon,
+                                    env_class='structured', warm_start='random')
     trainer = PPOTrainer(
         algo=algo, env_fn=env_fn,
         config=PPOConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
@@ -208,14 +210,20 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
 
     print(f"\n[4/6] Evaluating {len(algos)} algos × {len(suite)} graphs × {seeds} seeds …")
     best_n = 1 if quick else 5   # best-of-N stochastic rollouts for RL algos
-    rl_algos  = [neurocut, wrt, ss2v]
     cls_algos = [LeidenBaseline(), LouvainBaseline(), SpectralBaseline(), RandomBaseline()]
-    # Eval RL algos from leiden warm-start (paper-protocol: refine an existing partition)
-    df_rl  = compare_algos(rl_algos,  suite, task, n_seeds=seeds, horizon=horizon,
-                            eval_kwargs={"greedy": True, "best_of": best_n,
-                                         "env_kwargs": {"warm_start": "leiden"}})
+    # NeuroCUT + SS2V use NodeMoveEnv; WRT uses StructuredPartitionEnv
+    df_nc   = compare_algos([neurocut], suite, task, n_seeds=seeds, horizon=horizon,
+                             eval_kwargs={"greedy": True, "best_of": best_n,
+                                          "env_kwargs": {"warm_start": "leiden"}})
+    df_wrt  = compare_algos([wrt],      suite, task, n_seeds=seeds, horizon=horizon,
+                             eval_kwargs={"greedy": True, "best_of": best_n,
+                                          "env_kwargs": {"env_class": "structured",
+                                                         "warm_start": "leiden"}})
+    df_ss2v = compare_algos([ss2v],     suite, task, n_seeds=seeds, horizon=horizon,
+                             eval_kwargs={"greedy": True, "best_of": best_n,
+                                          "env_kwargs": {"warm_start": "leiden"}})
     df_cls = compare_algos(cls_algos, suite, task, n_seeds=seeds, horizon=horizon)
-    df = pd.concat([df_rl, df_cls], ignore_index=True)
+    df = pd.concat([df_nc, df_wrt, df_ss2v, df_cls], ignore_index=True)
     df["benchmark"] = "partition"
     return df
 

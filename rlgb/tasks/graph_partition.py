@@ -58,9 +58,14 @@ class GraphPartitionTask:
             return mini5()
         return fixed17()
 
-    def build_env(self, problem: Problem, horizon: int = 10, seed: int = 0, **kwargs):
+    def build_env(self, problem: Problem, horizon: int = 10, seed: int = 0,
+                   env_class: str = "node_move", **kwargs):
+        if env_class == "structured":
+            from rlgb.envs.structured_env import StructuredPartitionEnv
+            return StructuredPartitionEnv(task=self, problem=problem, horizon=horizon,
+                                          seed=seed, **kwargs)
         from rlgb.envs.node_move_env import NodeMoveEnv
-        return NodeMoveEnv(task=self, problem=problem, horizon=horizon, **kwargs)
+        return NodeMoveEnv(task=self, problem=problem, horizon=horizon, seed=seed, **kwargs)
 
     def reward(
         self,
