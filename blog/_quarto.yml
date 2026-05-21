@@ -19,7 +19,11 @@ website:
         text: Dynamic CD
       - href: 05-benchmark.qmd
         text: Benchmark Design
+      - href: 06-results.qmd
+        text: Results
     right:
+      - text: Project Page
+        href: ../docs/project-page.md
       - icon: github
         href: https://github.com/rl-graph-bench/rl-graph-bench
 
