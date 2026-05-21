@@ -195,6 +195,20 @@ class TestNodeMoveEnv:
         assert done, "Episode should terminate within horizon"
         env.close()
 
+    def test_spectral_warm_start(self):
+        """warm_start='spectral' should produce a valid initial partition."""
+        from rlgb.envs.node_move_env import NodeMoveEnv
+        from rlgb.tasks.graph_partition import GraphPartitionTask
+        from rlgb.data.synthetic import mini5
+        task = GraphPartitionTask(objective="ncut")
+        p = mini5()[0]
+        env = NodeMoveEnv(task=task, problem=p, horizon=3, warm_start="spectral")
+        obs, _ = env.reset(seed=0)
+        labels = env.labels
+        assert labels.shape == (p.n,)
+        assert set(labels).issubset(set(range(p.k_target)))
+        env.close()
+
 
 # ── NeuroCUT model ────────────────────────────────────────────────────────────
 

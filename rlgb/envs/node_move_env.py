@@ -47,7 +47,7 @@ class NodeMoveEnv(ClusteringEnv):
     horizon : int
         Max move actions per episode.
     seed : int
-    warm_start : "leiden" | "random" | "none"
+    warm_start : "leiden" | "spectral" | "random" | "none"
         Initial partition strategy.
     leiden_labels : np.ndarray | None
         Pre-computed Leiden partition (avoids re-running at reset time).
@@ -115,6 +115,8 @@ class NodeMoveEnv(ClusteringEnv):
             lbl = self._leiden_labels.copy()
         elif self._warm_start == "leiden":
             lbl = self._leiden_warm_start()
+        elif self._warm_start == "spectral":
+            lbl = self._spectral_warm_start()
         elif self._warm_start == "random":
             lbl = self._rng.integers(0, self.problem.k_target,
                                      size=self.problem.n).astype(np.int32)
@@ -139,6 +141,20 @@ class NodeMoveEnv(ClusteringEnv):
         except Exception:
             return self._rng.integers(0, self.problem.k_target,
                                       size=self.problem.n).astype(np.int32)
+
+    def _spectral_warm_start(self) -> np.ndarray:
+        try:
+            from sklearn.cluster import SpectralClustering
+            sc = SpectralClustering(
+                n_clusters=self.problem.k_target,
+                affinity="precomputed",
+                random_state=int(self._rng.integers(2**31)),
+                n_init=5,
+            )
+            lbl = sc.fit_predict(self.adj).astype(np.int32)
+            return lbl
+        except Exception:
+            return self._leiden_warm_start()
 
     def _canonicalize_labels(self) -> None:
         self.labels = _canonicalize(self.labels)
