@@ -111,7 +111,9 @@ def _train_ss2v(suite, task, n_steps: int, hidden: int, horizon: int, seed: int)
     from rlgb.training.dqn_trainer import DQNTrainer, DQNConfig
     rng = random.Random(seed)
     algo = SS2VAlgo(SS2VConfig(hidden=hidden, epsilon_decay=n_steps // 2))
-    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
+    # Use EdgeContractionEnv so action = edge index (proper D3QN semantics)
+    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon,
+                                     env_class="edge_contraction", warm_start="random")
     warmup = min(500, n_steps // 4)
     trainer = DQNTrainer(
         algo=algo, env_fn=env_fn,
@@ -223,7 +225,8 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
                                                          "warm_start": "leiden"}})
     df_ss2v = compare_algos([ss2v],     suite, task, n_seeds=seeds, horizon=horizon,
                              eval_kwargs={"greedy": True, "best_of": best_n,
-                                          "env_kwargs": {"warm_start": "leiden"}})
+                                          "env_kwargs": {"env_class": "edge_contraction",
+                                                         "warm_start": "random"}})
     df_cls = compare_algos(cls_algos, suite, task, n_seeds=seeds, horizon=horizon)
     df = pd.concat([df_nc, df_wrt, df_ss2v, df_cls], ignore_index=True)
     df["benchmark"] = "partition"

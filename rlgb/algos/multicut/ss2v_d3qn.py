@@ -109,30 +109,41 @@ class SS2VAlgo(RLAgent):
         return cfg.epsilon_end + decay
 
     def select_action(self, obs: dict, greedy: bool = False) -> int:
+        """Select an inter-cluster edge to contract.
+
+        Returns the edge index (0..n_inter_edges-1) to be applied by
+        EdgeContractionEnv.step().  Falls back to NodeMove semantics when
+        running in a NodeMoveEnv (for backwards compatibility with tests).
+        """
         adj_t    = torch.tensor(obs["adj"],        dtype=torch.float32, device=self._device)
         feats_t  = torch.tensor(obs["node_feats"], dtype=torch.float32, device=self._device)
         labels_t = torch.tensor(obs["labels"],     dtype=torch.long,    device=self._device)
-        k = int(labels_t.max().item()) + 1
         N = adj_t.shape[0]
-        # Legal actions = (node, cluster) pairs → encode as flat index
-        cand_np = [(n, c) for n in range(N) for c in range(k) if labels_t[n] != c]
-        if not cand_np:
+        k = int(labels_t.max().item()) + 1
+
+        # Count valid inter-cluster edges
+        adj_np    = obs["adj"]
+        labels_np = obs["labels"]
+        rows, cols = np.where(adj_np > 0)
+        inter_mask = (labels_np[rows] != labels_np[cols]) & (rows < cols)
+        n_edges = int(inter_mask.sum())
+
+        if n_edges == 0:
             return 0
-        n_cands = min(len(cand_np), self.MAX_EDGES)
-        cand_np = cand_np[:n_cands]
+
+        n_cands = min(n_edges, self.MAX_EDGES)
 
         if not greedy and random.random() < self._eps:
             idx = random.randrange(n_cands)
         else:
-            g_feat = torch.tensor([N, k, adj_t.sum().item() / max(N, 1)],
+            g_feat = torch.tensor([N, k, float(adj_t.sum().item()) / max(N, 1)],
                                   dtype=torch.float32, device=self._device)
             with torch.no_grad():
                 q = self._online(feats_t, adj_t, g_feat)[:n_cands]
             idx = int(q.argmax().item())
 
         self._step += 1
-        node_idx, clust_idx = cand_np[idx]
-        return node_idx * k + clust_idx
+        return idx  # edge index in [0, n_cands)
 
     def push_transition(self, t: Transition) -> None:
         self._replay.push(t)
@@ -141,24 +152,25 @@ class SS2VAlgo(RLAgent):
         if len(self._replay) < self._cfg.batch_size:
             return {}
         batch = self._replay.sample(self._cfg.batch_size, self._rng)
-        # Simplified DQN loss (no full double-DQN here to keep stub short)
         total_loss = 0.0
         for t in batch:
             adj_t    = torch.tensor(t.obs["adj"],        dtype=torch.float32, device=self._device)
             feats_t  = torch.tensor(t.obs["node_feats"], dtype=torch.float32, device=self._device)
-            labels_t = torch.tensor(t.obs["labels"],     dtype=torch.long,    device=self._device)
             N = adj_t.shape[0]
+            labels_t = torch.tensor(t.obs["labels"], dtype=torch.long, device=self._device)
             k = int(labels_t.max().item()) + 1
-            g_feat  = torch.tensor([N, k, adj_t.sum().item() / max(N, 1)],
+            g_feat  = torch.tensor([N, k, float(adj_t.sum().item()) / max(N, 1)],
                                    dtype=torch.float32, device=self._device)
             q_vals  = self._online(feats_t, adj_t, g_feat)
-            act_idx = min(int(t.action) // max(k, 1), self.MAX_EDGES - 1)
+            # action IS the edge index directly
+            act_idx = min(int(t.action), self.MAX_EDGES - 1)
             q_pred  = q_vals[act_idx]
             with torch.no_grad():
                 adj_n  = torch.tensor(t.next_obs["adj"], dtype=torch.float32, device=self._device)
                 feat_n = torch.tensor(t.next_obs["node_feats"], dtype=torch.float32, device=self._device)
                 lab_n  = torch.tensor(t.next_obs["labels"], dtype=torch.long, device=self._device)
-                g2     = torch.tensor([N, k, adj_n.sum().item() / max(N, 1)],
+                k_n    = int(lab_n.max().item()) + 1
+                g2     = torch.tensor([N, k_n, float(adj_n.sum().item()) / max(N, 1)],
                                       dtype=torch.float32, device=self._device)
                 q_next = self._target(feat_n, adj_n, g2).max()
                 q_tgt  = t.reward + self._cfg.gamma * q_next * (1 - float(t.done))

@@ -48,7 +48,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       Quick-run result on synthetic 3-snapshot SBM (30 ep): AC2CD NMI=1.00 (matches Leiden).
       **Performance note**: paper target (NMI≥0.75 on BlogCatalog3) requires a real-world dynamic
       graph dataset — see TODO #5 (real-world loaders).
-- [ ] **SS2V-D3QN training** — stub exists; DQN trainer exists; needs edge-contraction env + replay buffer wiring.
+- [x] **SS2V-D3QN training** — `EdgeContractionEnv` created (`rlgb/envs/edge_contraction_env.py`):
+      action = edge index among inter-cluster edges; step = merge clusters of edge endpoints;
+      resets to k_init = min(N//2, 2*k_target) random clusters so agent contracts down to
+      k_target; terminates when k == k_target or no inter-cluster edges remain.
+      `GraphPartitionTask.build_env(env_class='edge_contraction')` added. `SS2VAlgo.
+      select_action()` updated to return edge index (not node-move flat index). `SS2VAlgo.
+      update()` uses action as direct edge index in DQN loss. `_train_ss2v` uses
+      `env_class='edge_contraction'`; partition benchmark eval uses same.
+      **Performance note**: DQN needs 10k+ steps to converge (vs 50-ep quick run); full-run
+      (20k steps) expected to produce competitive NCut. SS2V paper target is multicut on
+      synthetic+real graphs — not directly comparable to NCut partition benchmark.
 - [ ] **Real-world loaders** — `pyg_loaders.py` + `snap_loaders.py` exist but datasets are downloaded lazily; add Cora/CiteSeer/DBLP benchmarks to `full_benchmark.py`.
 - [ ] **WRT community task eval** — `CommunityEnv` + CLARE/SLRL need trained weights to compare against SLRL paper numbers.
 - [ ] **Speed: vectorised NCut** — current NCut computation is O(E) per step but runs in Python; a torch-batched version would enable GPU training.

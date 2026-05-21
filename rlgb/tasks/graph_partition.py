@@ -64,6 +64,10 @@ class GraphPartitionTask:
             from rlgb.envs.structured_env import StructuredPartitionEnv
             return StructuredPartitionEnv(task=self, problem=problem, horizon=horizon,
                                           seed=seed, **kwargs)
+        if env_class == "edge_contraction":
+            from rlgb.envs.edge_contraction_env import EdgeContractionEnv
+            return EdgeContractionEnv(task=self, problem=problem, horizon=horizon,
+                                      seed=seed, **kwargs)
         from rlgb.envs.node_move_env import NodeMoveEnv
         return NodeMoveEnv(task=self, problem=problem, horizon=horizon, seed=seed, **kwargs)
 
