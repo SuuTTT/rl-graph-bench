@@ -98,6 +98,7 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
         PPOTrainer(algo=algo, env_fn=env_fn1,
                    config=PPOConfig(n_episodes=n1, horizon=horizon, lr=3e-4,
                                     n_episodes_per_update=8, entropy_coef=0.03,
+                                    lr_schedule="cosine",
                                     log_every=n1 // 5 + 1,
                                     save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
         if n2 > 0:

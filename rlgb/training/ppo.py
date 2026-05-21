@@ -69,6 +69,8 @@ class PPOConfig:
     out_dir: str = "results"
     device: str = "cpu"
     seed: int = 0
+    lr_schedule: str = "none"   # "none" | "cosine" | "linear"
+    lr_min_ratio: float = 0.1
 
 
 class _Rollout:
@@ -223,12 +225,28 @@ class PPOTrainer:
 
     def _train_ppo(self) -> None:
         """Full PPO loop with GAE, clipped objective, and value function loss."""
-        n_update = self._cfg.n_episodes_per_update
+        import torch.optim.lr_scheduler as _lr_sched
+        cfg = self._cfg
+        n_update = cfg.n_episodes_per_update
         rollout  = _Rollout()
         running_reward = 0.0
         t0 = time.perf_counter()
 
-        for ep in range(1, self._cfg.n_episodes + 1):
+        # Optional LR schedule
+        _opt = getattr(self._algo, "_optimizer", None)
+        if _opt and cfg.lr_schedule == "cosine":
+            _scheduler = _lr_sched.CosineAnnealingLR(
+                _opt, T_max=cfg.n_episodes,
+                eta_min=cfg.lr * cfg.lr_min_ratio)
+        elif _opt and cfg.lr_schedule == "linear":
+            _scheduler = _lr_sched.LinearLR(
+                _opt, start_factor=1.0,
+                end_factor=cfg.lr_min_ratio,
+                total_iters=cfg.n_episodes)
+        else:
+            _scheduler = None
+
+        for ep in range(1, cfg.n_episodes + 1):
             env  = self._env_fn()
             obs, _ = env.reset(seed=int(self._rng.integers(0, 2**31)))
             self._algo.reset_episode()
@@ -254,7 +272,7 @@ class PPOTrainer:
             if ep % n_update == 0 and rollout.obs_list:
                 advs, rets = _compute_gae(
                     rollout.rewards, rollout.values, rollout.dones,
-                    self._cfg.gamma, self._cfg.gae_lambda, self._device,
+                    cfg.gamma, cfg.gae_lambda, self._device,
                 )
                 self._algo.ppo_update(
                     obs_list=rollout.obs_list,
@@ -262,21 +280,23 @@ class PPOTrainer:
                     old_log_probs=torch.stack(rollout.log_probs),
                     advantages=advs,
                     returns=rets,
-                    clip_eps=self._cfg.clip_eps,
-                    n_epochs=self._cfg.n_epochs,
-                    minibatch_size=self._cfg.minibatch_size,
-                    value_coef=self._cfg.value_coef,
-                    entropy_coef=self._cfg.entropy_coef,
-                    grad_clip=self._cfg.grad_clip,
+                    clip_eps=cfg.clip_eps,
+                    n_epochs=cfg.n_epochs,
+                    minibatch_size=cfg.minibatch_size,
+                    value_coef=cfg.value_coef,
+                    entropy_coef=cfg.entropy_coef,
+                    grad_clip=cfg.grad_clip,
                 )
+                if _scheduler is not None:
+                    _scheduler.step()
                 rollout = _Rollout()
 
-            if ep % self._cfg.log_every == 0:
+            if ep % cfg.log_every == 0:
                 elapsed = time.perf_counter() - t0
-                print(f"[PPO] ep={ep}/{self._cfg.n_episodes}  "
+                print(f"[PPO] ep={ep}/{cfg.n_episodes}  "
                       f"reward={running_reward:.4f}  t={elapsed:.1f}s")
 
-            if self._cfg.save_every > 0 and ep % self._cfg.save_every == 0:
+            if cfg.save_every > 0 and ep % cfg.save_every == 0:
                 self._save(ep)
 
         self._save("last")
