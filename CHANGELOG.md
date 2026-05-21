@@ -7,28 +7,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`NodeMoveEnv` `warm_start="spectral"`** — new warm-start option initialises NeuroCUT
+  from scikit-learn `SpectralClustering` (NCut≈0.406 on mini5 vs Leiden NCut≈0.582).
+  Falls back to leiden on `sklearn` failure. `d9bb1db`
+
+- **`test_spectral_warm_start`** in `TestNodeMoveEnv` — verifies valid initial partition
+  under spectral warm-start. `d9bb1db`
+
+- **`test_ppo_cosine_lr_smoke`** in `TestNeuroCUTAlgo` — verifies PPO cosine LR schedule
+  completes without error. `48d25cd`
+
 ### Changed
 
-- **`SLRLConfig.entropy_coef`** raised `0.01 → 0.03` — higher entropy bonus prevents the
-  policy from committing to premature STOP actions; greedy-eval NMI improved from 0.739 →
-  **0.807** at 1 000 ep on mini5 (proxy target ≥ 0.75 exceeded). `ee18334`
+- **NeuroCUT Phase-2 fine-tune** now uses `warm_start="spectral"` (was `"leiden"`) for both
+  training and eval, giving NeuroCUT a better starting partition to refine. `f9509cd`
+
+- **PPO trainer logs** now use `print(..., flush=True)` to prevent stdout buffering when
+  running as background async process. `ddd0d70`
+
+- **`PPOConfig`** gains `lr_schedule: str = "none"` and `lr_min_ratio: float = 0.1`.
+  `PPOTrainer._train_ppo()` builds `CosineAnnealingLR` or `LinearLR` from `algo._optimizer`
+  after each episode when configured. NeuroCUT Phase-1 in full benchmark now uses
+  `lr_schedule="cosine"`. `de8d89c`
+
+- **`SLRLConfig.entropy_coef`** raised `0.01 → 0.03` — greedy-eval NMI improved from
+  0.739 → **0.807** on mini5 (proxy target ≥ 0.75 exceeded). `ee18334`
 
 - **`TrainConfig`** gains `lr_schedule: str = "none"` and `lr_min_ratio: float = 0.1`.
-  Trainer applies `CosineAnnealingLR` or `LinearLR` to `algo._optimizer` when requested.
-  All three community/dynamic `_train_*` helpers in `full_benchmark.py` now use
-  `lr_schedule="cosine"`. `ee18334`
+  All three community/dynamic `_train_*` helpers use `lr_schedule="cosine"`. `ee18334`
 
-- **Community benchmark `n_ep`** raised `1000 → 3000` for full run. `ee18334`
+- **Community / dynamic benchmark `n_ep`** raised `1000 → 3000` for paper-target
+  convergence. `ba2286a`
 
-- **`run_community_benchmark`** now evaluates RL algos with `greedy=True` via separate
-  `compare_algos` call; stochastic rollouts underestimated the learned policy by ~6–9%
-  NMI. Leiden baseline still uses stochastic eval. Dynamic AC2CD eval similarly corrected.
+- **`run_community_benchmark`** evaluates RL algos with `greedy=True` (stochastic rollouts
+  underestimated learned policy by ~6–9% NMI). `ba2286a`
 
-- **`run_dynamic_benchmark`** `n_ep` raised `1000 → 3000` for AC2CD.
-
-- **NeuroCUT Phase-1 PPO** `entropy_coef` raised `0.01 → 0.03`; Phase-2 fine-tune stays
-  at `0.01` to preserve the leiden-warm-start refinement. Encourages broader node-move
-  exploration in the curriculum's random-warm-start phase.
+- **NeuroCUT Phase-1 PPO** `entropy_coef` raised `0.01 → 0.03`; Phase-2 stays at `0.01`.
+  `ba2286a`
 
 ---
 
