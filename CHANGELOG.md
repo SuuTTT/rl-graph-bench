@@ -40,12 +40,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Experiments
 
+- **NeuroCUT h=128 Phase-3 recovery, 800ep random WS, lr=1e-4, cosine LR** —
+  Loaded Phase-2-degraded ckpt (NCut=0.4883), retrained with random WS. Non-monotonic
+  recovery: ep=200→0.4883, ep=400→0.5155, ep=600→0.5102, **ep=800→0.3561** (NMI=0.7636).
+  **NCut=0.3561 is a new best: −12% vs Spectral (0.4056), gap to target 0.333 reduced to 7%.**
+  NMI drop (0.94→0.76) suggests model trades cluster accuracy for lower NCut.
+
 - **NeuroCUT h=128, 3000ep (2700+300), entropy=0.03/0.01, cosine LR Phase 1** —
   Phase 1 reward peaked at 0.9249 (ep=2500). **Phase 2 leiden WS (300ep) degraded model**:
   negative reward throughout (−0.06→−0.13), final NCut=0.4883. Worse than h=64. Root cause:
   Phase 2 leiden-WS fine-tuning is counter-productive at all scales (h=32/64/128 all show
-  negative reward during Phase 2). Recovery experiment (Phase 3 random WS from degraded
-  checkpoint) in progress.
+  negative reward during Phase 2).
 
 - **NeuroCUT h=64, 500ep (450+50), entropy=0.03, cosine LR** — greedy eval with leiden WS
   reaches **NCut=0.4056** (= Spectral baseline), NMI=0.9674 on mini5. Gap to target +22%.
