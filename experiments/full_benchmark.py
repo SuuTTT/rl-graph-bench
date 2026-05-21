@@ -52,12 +52,39 @@ def parse_args():
 
 # ── Training helpers ──────────────────────────────────────────────────────────
 
+def _ckpt_path(out_dir: str | Path, algo_name: str, n_ep_or_steps: int, hidden: int) -> Path:
+    """Return deterministic checkpoint path for (algo, hparams) combo."""
+    return Path(out_dir) / "checkpoints" / f"{algo_name}_ep{n_ep_or_steps}_h{hidden}.pt"
+
+
+def _try_load(ckpt: Path, algo) -> bool:
+    """Load *algo* weights from *ckpt* if it exists. Returns True on success."""
+    if not ckpt.exists():
+        return False
+    try:
+        algo.load(str(ckpt))
+        print(f"  [ckpt] loaded {ckpt.name} — skipping training")
+        return True
+    except Exception as exc:
+        print(f"  [ckpt] WARNING: load failed ({exc}); retraining…")
+        return False
+
+
+def _save_ckpt(ckpt: Path, algo) -> None:
+    ckpt.parent.mkdir(parents=True, exist_ok=True)
+    algo.save(str(ckpt))
+    print(f"  [ckpt] saved → {ckpt}")
+
+
 def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
-                    curriculum: bool = False):
+                    curriculum: bool = False, out_dir: str = "results"):
     from rlgb.algos.node_move.neurocut import NeuroCUTAlgo, NeuroCUTConfig
     from rlgb.training.ppo import PPOTrainer, PPOConfig
     rng = random.Random(seed)
     algo = NeuroCUTAlgo(NeuroCUTConfig(hidden=hidden))
+    ckpt = _ckpt_path(out_dir, "neurocut", n_episodes, hidden)
+    if _try_load(ckpt, algo):
+        return algo
 
     if curriculum and n_episodes >= 500:
         # Phase 1 (90 %): random warm-start — learns to improve from any starting point.
@@ -88,99 +115,120 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
                                     n_episodes_per_update=4,
                                     log_every=n_episodes // 5 + 1,
                                     save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
+    _save_ckpt(ckpt, algo)
     return algo
 
 
-def _train_wrt(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int):
+def _train_wrt(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
+               out_dir: str = "results"):
     from rlgb.algos.structured.wrt import WRTAlgo, WRTConfig
     from rlgb.training.ppo import PPOTrainer, PPOConfig
     rng = random.Random(seed)
     algo = WRTAlgo(WRTConfig(hidden=hidden))
+    ckpt = _ckpt_path(out_dir, "wrt", n_episodes, hidden)
+    if _try_load(ckpt, algo):
+        return algo
     # Use StructuredPartitionEnv so merge/split actions are decoded correctly
     env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon,
                                     env_class='structured', warm_start='random')
-    trainer = PPOTrainer(
+    PPOTrainer(
         algo=algo, env_fn=env_fn,
         config=PPOConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                          n_episodes_per_update=4, log_every=n_episodes // 5 + 1,
                          save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
-    )
-    trainer.train()
+    ).train()
+    _save_ckpt(ckpt, algo)
     return algo
 
 
-def _train_ss2v(suite, task, n_steps: int, hidden: int, horizon: int, seed: int):
+def _train_ss2v(suite, task, n_steps: int, hidden: int, horizon: int, seed: int,
+                out_dir: str = "results"):
     from rlgb.algos.multicut.ss2v_d3qn import SS2VAlgo, SS2VConfig
     from rlgb.training.dqn_trainer import DQNTrainer, DQNConfig
     rng = random.Random(seed)
     algo = SS2VAlgo(SS2VConfig(hidden=hidden, epsilon_decay=n_steps // 2))
+    ckpt = _ckpt_path(out_dir, "ss2v", n_steps, hidden)
+    if _try_load(ckpt, algo):
+        return algo
     # Use EdgeContractionEnv so action = edge index (proper D3QN semantics)
     env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon,
                                      env_class="edge_contraction", warm_start="random")
     warmup = min(500, n_steps // 4)
-    trainer = DQNTrainer(
+    DQNTrainer(
         algo=algo, env_fn=env_fn,
         config=DQNConfig(n_steps=n_steps, warmup_steps=warmup, horizon=horizon,
                          update_every=4, log_every=n_steps // (horizon * 5) + 1,
                          save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
-    )
-    trainer.train()
+    ).train()
+    _save_ckpt(ckpt, algo)
     return algo
 
 
-def _train_ac2cd(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int):
+def _train_ac2cd(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
+                 out_dir: str = "results"):
     from rlgb.algos.dynamic.ac2cd import AC2CDAlgo, AC2CDConfig
     from rlgb.training.trainer import Trainer, TrainConfig
     rng = random.Random(seed)
     algo = AC2CDAlgo(AC2CDConfig(hidden=hidden))
+    ckpt = _ckpt_path(out_dir, "ac2cd", n_episodes, hidden)
+    if _try_load(ckpt, algo):
+        return algo
     # Warm-start from leiden: agent learns to track snapshot changes from good init
     env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon,
                                      warm_start="leiden")
-    trainer = Trainer(
+    Trainer(
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                            n_episode_per_update=4, log_every=n_episodes // 5 + 1,
                            save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
-    )
-    trainer.train()
+    ).train()
+    _save_ckpt(ckpt, algo)
     return algo
 
 
-def _train_clare(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int):
+def _train_clare(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
+                 out_dir: str = "results"):
     from rlgb.algos.community.clare import CLAREAlgo, CLAREConfig
     from rlgb.training.trainer import Trainer, TrainConfig
     rng = random.Random(seed)
     algo = CLAREAlgo(CLAREConfig(hidden=hidden))
+    ckpt = _ckpt_path(out_dir, "clare", n_episodes, hidden)
+    if _try_load(ckpt, algo):
+        return algo
     env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
-    trainer = Trainer(
+    Trainer(
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                            n_episode_per_update=4, log_every=n_episodes // 5 + 1,
                            save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
-    )
-    trainer.train()
+    ).train()
+    _save_ckpt(ckpt, algo)
     return algo
 
 
-def _train_slrl(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int):
+def _train_slrl(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
+                out_dir: str = "results"):
     from rlgb.algos.community.slrl import SLRLAlgo
     from rlgb.training.trainer import Trainer, TrainConfig
     rng = random.Random(seed)
     algo = SLRLAlgo()
+    ckpt = _ckpt_path(out_dir, "slrl", n_episodes, 0)  # SLRLAlgo has no hidden param
+    if _try_load(ckpt, algo):
+        return algo
     env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
-    trainer = Trainer(
+    Trainer(
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                            n_episode_per_update=4, log_every=n_episodes // 5 + 1,
                            save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
-    )
-    trainer.train()
+    ).train()
+    _save_ckpt(ckpt, algo)
     return algo
 
 
 # ── Benchmark tasks ───────────────────────────────────────────────────────────
 
-def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame:
+def run_partition_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str = "results") -> pd.DataFrame:
     """Graph partition: neurocut, wrt, ss2v vs leiden, louvain, spectral, random."""
     suite = mini5() if quick else fixed17()
     # Augment with real-world graphs (Cora/CiteSeer) for paper target comparison.
@@ -211,17 +259,17 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
     t0 = time.perf_counter()
     print("[1/6] Training NeuroCUT …")
     neurocut = _train_neurocut(suite, task, n_ep, hid, horizon, seed=42,
-                                curriculum=True)
+                                curriculum=True, out_dir=out_dir)
     print(f"      done in {time.perf_counter()-t0:.1f}s")
 
     t1 = time.perf_counter()
     print("[2/6] Training WRT …")
-    wrt = _train_wrt(suite, task, n_ep, hid, horizon, seed=42)
+    wrt = _train_wrt(suite, task, n_ep, hid, horizon, seed=42, out_dir=out_dir)
     print(f"      done in {time.perf_counter()-t1:.1f}s")
 
     t2 = time.perf_counter()
     print("[3/6] Training SS2V-D3QN …")
-    ss2v = _train_ss2v(suite, task, dqn_s, hid, horizon, seed=42)
+    ss2v = _train_ss2v(suite, task, dqn_s, hid, horizon, seed=42, out_dir=out_dir)
     print(f"      done in {time.perf_counter()-t2:.1f}s")
 
     algos = [neurocut, wrt, ss2v, LeidenBaseline(), LouvainBaseline(),
@@ -248,7 +296,7 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
     return df
 
 
-def run_community_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame:
+def run_community_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str = "results") -> pd.DataFrame:
     """Community expansion: clare, slrl vs leiden (adapts objective)."""
     task = CommunityExpandTask(objective="h2")
     # Use task's own suite (fixed17 community graphs) rather than partition proxy
@@ -263,10 +311,10 @@ def run_community_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
     print(f"{'='*60}")
 
     print("[1/3] Training CLARE …")
-    clare = _train_clare(suite, task, n_ep, hid, horizon, seed=42)
+    clare = _train_clare(suite, task, n_ep, hid, horizon, seed=42, out_dir=out_dir)
 
     print("[2/3] Training SLRL …")
-    slrl = _train_slrl(suite, task, n_ep, hid, horizon, seed=42)
+    slrl = _train_slrl(suite, task, n_ep, hid, horizon, seed=42, out_dir=out_dir)
 
     algos = [clare, slrl, LeidenBaseline()]
     print(f"[3/3] Evaluating {len(algos)} algos …")
@@ -275,7 +323,7 @@ def run_community_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFra
     return df
 
 
-def run_dynamic_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame:
+def run_dynamic_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str = "results") -> pd.DataFrame:
     """Dynamic CD: ac2cd vs leiden (evaluated per snapshot)."""
     task  = DynamicCDTask()
     suite = task.build_suite()  # synthetic temporal suite
@@ -288,7 +336,7 @@ def run_dynamic_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame
     print(f"{'='*60}")
 
     print("[1/2] Training AC2CD …")
-    ac2cd = _train_ac2cd(suite, task, n_ep, hid, horizon, seed=42)
+    ac2cd = _train_ac2cd(suite, task, n_ep, hid, horizon, seed=42, out_dir=out_dir)
 
     algos = [ac2cd, LeidenBaseline()]
     print("[2/2] Evaluating …")
@@ -313,19 +361,19 @@ def main():
     dfs = []
 
     try:
-        df_part = run_partition_benchmark(args.quick, args.seeds, args.horizon)
+        df_part = run_partition_benchmark(args.quick, args.seeds, args.horizon, out_dir=str(out_dir))
         dfs.append(df_part)
     except Exception as exc:
         print(f"[WARN] Partition benchmark failed: {exc}")
 
     try:
-        df_comm = run_community_benchmark(args.quick, args.seeds, args.horizon)
+        df_comm = run_community_benchmark(args.quick, args.seeds, args.horizon, out_dir=str(out_dir))
         dfs.append(df_comm)
     except Exception as exc:
         print(f"[WARN] Community benchmark failed: {exc}")
 
     try:
-        df_dyn = run_dynamic_benchmark(args.quick, args.seeds, args.horizon)
+        df_dyn = run_dynamic_benchmark(args.quick, args.seeds, args.horizon, out_dir=str(out_dir))
         dfs.append(df_dyn)
     except Exception as exc:
         print(f"[WARN] Dynamic benchmark failed: {exc}")

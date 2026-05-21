@@ -75,7 +75,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       files placed in $RLGB_DATA_DIR/SNAP/ (see snap_loaders.py).
 - [x] **Speed: vectorised NCut** — `ncut()` rewritten with numpy einsum (9× faster); `ncut_torch(adj, labels)` added for differentiable GPU training via autograd. Supports hard (long) and soft (float N×K) label tensors.
 - [x] **PPO replace REINFORCE** — `NeuroCUTAlgo` gains `select_action_with_logprob` + `ppo_update` (clipped surrogate, GAE, per-transition re-evaluation). `_train_neurocut` in `full_benchmark.py` now uses `PPOTrainer`; PPOTrainer auto-detects PPO mode. 82/82 tests passing.
-- [ ] **Save/load trained checkpoints in experiments/** — `full_benchmark.py` trains from scratch each run; cache checkpoints to `results/` so re-runs skip training.
+- [x] **Save/load trained checkpoints in experiments/** — `_ckpt_path(out_dir, name, n_ep, hidden)` + `_try_load` + `_save_ckpt` helpers added. All six `_train_*` functions check for cached checkpoint before training and save after. `run_*` benchmark functions accept `out_dir` parameter threaded from `main()`. Re-run saves ~100% of training time for unchanged hyperparams.
 - [ ] **CI matrix: Windows + macOS** — current CI only covers Linux (ubuntu-latest); add Windows runner once torch_geometric has stable wheels.
 
 ---
