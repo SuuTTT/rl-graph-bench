@@ -103,7 +103,7 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
                                     save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
         if n2 > 0:
             rng2 = random.Random(seed + 1)
-            env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='leiden')
+            env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='spectral')
             PPOTrainer(algo=algo, env_fn=env_fn2,
                        config=PPOConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
                                         n_episodes_per_update=8, entropy_coef=0.01,
@@ -285,7 +285,7 @@ def run_partition_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str 
     # NeuroCUT + SS2V use NodeMoveEnv; WRT uses StructuredPartitionEnv
     df_nc   = compare_algos([neurocut], suite, task, n_seeds=seeds, horizon=horizon,
                              eval_kwargs={"greedy": True, "best_of": best_n,
-                                          "env_kwargs": {"warm_start": "leiden"}})
+                                          "env_kwargs": {"warm_start": "spectral"}})
     df_wrt  = compare_algos([wrt],      suite, task, n_seeds=seeds, horizon=horizon,
                              eval_kwargs={"greedy": True, "best_of": best_n,
                                           "env_kwargs": {"env_class": "structured",
