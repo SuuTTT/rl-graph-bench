@@ -97,7 +97,7 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
         env_fn1 = lambda: task.build_env(rng.choice(suite), horizon=horizon, warm_start='random')
         PPOTrainer(algo=algo, env_fn=env_fn1,
                    config=PPOConfig(n_episodes=n1, horizon=horizon, lr=3e-4,
-                                    n_episodes_per_update=8,
+                                    n_episodes_per_update=8, entropy_coef=0.03,
                                     log_every=n1 // 5 + 1,
                                     save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
         if n2 > 0:
@@ -105,7 +105,7 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
             env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='leiden')
             PPOTrainer(algo=algo, env_fn=env_fn2,
                        config=PPOConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
-                                        n_episodes_per_update=8,
+                                        n_episodes_per_update=8, entropy_coef=0.01,
                                         log_every=n2 // 5 + 1,
                                         save_every=0, out_dir="/tmp/bench_ckpts", seed=seed + 1)).train()
     else:
@@ -306,7 +306,7 @@ def run_community_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str 
     base_suite = mini5() if quick else task.build_suite()
     suite = base_suite[:3] if quick else base_suite
 
-    n_ep = 30 if quick else 1000
+    n_ep = 30 if quick else 3000   # raised 1000 → 3000 for paper-target convergence
     hid  = 32 if quick else 64
 
     print(f"\n{'='*60}")
@@ -319,9 +319,13 @@ def run_community_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str 
     print("[2/3] Training SLRL …")
     slrl = _train_slrl(suite, task, n_ep, hid, horizon, seed=42, out_dir=out_dir)
 
-    algos = [clare, slrl, LeidenBaseline()]
-    print(f"[3/3] Evaluating {len(algos)} algos …")
-    df = compare_algos(algos, suite, task, n_seeds=seeds, horizon=horizon)
+    algos_rl  = [clare, slrl]
+    print(f"[3/3] Evaluating {len(algos_rl)+1} algos …")
+    # Use greedy rollouts for RL algos; stochastic eval underestimates learned policy
+    df_rl  = compare_algos(algos_rl, suite, task, n_seeds=seeds, horizon=horizon,
+                            eval_kwargs={"greedy": True})
+    df_cls = compare_algos([LeidenBaseline()], suite, task, n_seeds=seeds, horizon=horizon)
+    df = pd.concat([df_rl, df_cls], ignore_index=True)
     df["benchmark"] = "community"
     return df
 
@@ -331,7 +335,7 @@ def run_dynamic_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str = 
     task  = DynamicCDTask()
     suite = task.build_suite()  # synthetic temporal suite
 
-    n_ep = 30 if quick else 1000
+    n_ep = 30 if quick else 3000   # raised 1000 → 3000 for better AC2CD convergence
     hid  = 32 if quick else 64
 
     print(f"\n{'='*60}")
@@ -341,10 +345,10 @@ def run_dynamic_benchmark(quick: bool, seeds: int, horizon: int, out_dir: str = 
     print("[1/2] Training AC2CD …")
     ac2cd = _train_ac2cd(suite, task, n_ep, hid, horizon, seed=42, out_dir=out_dir)
 
-    algos = [ac2cd, LeidenBaseline()]
     print("[2/2] Evaluating …")
     df_ac2cd = compare_algos([ac2cd], suite, task, n_seeds=seeds, horizon=horizon,
-                              eval_kwargs={"env_kwargs": {"warm_start": "leiden"}})
+                              eval_kwargs={"greedy": True,
+                                           "env_kwargs": {"warm_start": "leiden"}})
     df_cls   = compare_algos([LeidenBaseline()], suite, task, n_seeds=seeds, horizon=horizon)
     df = pd.concat([df_ac2cd, df_cls], ignore_index=True)
     df["benchmark"] = "dynamic"

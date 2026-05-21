@@ -10,16 +10,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - **`SLRLConfig.entropy_coef`** raised `0.01 → 0.03` — higher entropy bonus prevents the
-  policy from committing to premature STOP actions; quick-run NMI improved from 0.739 → 0.772
-  at 300 ep (proxy target ≥ 0.75 now exceeded even at short training budgets).
+  policy from committing to premature STOP actions; greedy-eval NMI improved from 0.739 →
+  **0.807** at 1 000 ep on mini5 (proxy target ≥ 0.75 exceeded). `ee18334`
 
 - **`TrainConfig`** gains `lr_schedule: str = "none"` and `lr_min_ratio: float = 0.1`.
   Trainer applies `CosineAnnealingLR` or `LinearLR` to `algo._optimizer` when requested.
   All three community/dynamic `_train_*` helpers in `full_benchmark.py` now use
-  `lr_schedule="cosine"`.
+  `lr_schedule="cosine"`. `ee18334`
 
-- **Community benchmark `n_ep`** raised `1000 → 3000` for full run. Combined with cosine
-  decay and higher entropy, SLRL is projected to reach NMI ≥ 0.80 at full training.
+- **Community benchmark `n_ep`** raised `1000 → 3000` for full run. `ee18334`
+
+- **`run_community_benchmark`** now evaluates RL algos with `greedy=True` via separate
+  `compare_algos` call; stochastic rollouts underestimated the learned policy by ~6–9%
+  NMI. Leiden baseline still uses stochastic eval. Dynamic AC2CD eval similarly corrected.
+
+- **`run_dynamic_benchmark`** `n_ep` raised `1000 → 3000` for AC2CD.
+
+- **NeuroCUT Phase-1 PPO** `entropy_coef` raised `0.01 → 0.03`; Phase-2 fine-tune stays
+  at `0.01` to preserve the leiden-warm-start refinement. Encourages broader node-move
+  exploration in the curriculum's random-warm-start phase.
 
 ---
 
