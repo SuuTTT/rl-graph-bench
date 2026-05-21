@@ -214,7 +214,7 @@ class PPOTrainer:
             if ep % self._cfg.log_every == 0:
                 elapsed = time.perf_counter() - t0
                 print(f"[PPO/REINFORCE] ep={ep}/{self._cfg.n_episodes}  "
-                      f"reward={running_reward:.4f}  t={elapsed:.1f}s")
+                      f"reward={running_reward:.4f}  t={elapsed:.1f}s", flush=True)
 
             if self._cfg.save_every > 0 and ep % self._cfg.save_every == 0:
                 self._save(ep)
@@ -294,7 +294,7 @@ class PPOTrainer:
             if ep % cfg.log_every == 0:
                 elapsed = time.perf_counter() - t0
                 print(f"[PPO] ep={ep}/{cfg.n_episodes}  "
-                      f"reward={running_reward:.4f}  t={elapsed:.1f}s")
+                      f"reward={running_reward:.4f}  t={elapsed:.1f}s", flush=True)
 
             if cfg.save_every > 0 and ep % cfg.save_every == 0:
                 self._save(ep)
