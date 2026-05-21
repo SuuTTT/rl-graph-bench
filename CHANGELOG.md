@@ -73,8 +73,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       SNAP datasets. Quick-run (30 ep, 3 SBM graphs): SLRL NMI=0.739 (proxy target ≥0.75,
       gap=−1.5%); CLARE NMI=0.368 (gap=−51%). SNAP DBLP/Amazon comparison available when
       files placed in $RLGB_DATA_DIR/SNAP/ (see snap_loaders.py).
-- [ ] **Speed: vectorised NCut** — current NCut computation is O(E) per step but runs in Python; a torch-batched version would enable GPU training.
-- [ ] **PPO replace REINFORCE** — `ppo.py` trainer exists; swap NeuroCUT training loop from REINFORCE to PPO for better sample efficiency.
+- [x] **Speed: vectorised NCut** — `ncut()` rewritten with numpy einsum (9× faster); `ncut_torch(adj, labels)` added for differentiable GPU training via autograd. Supports hard (long) and soft (float N×K) label tensors.
+- [x] **PPO replace REINFORCE** — `NeuroCUTAlgo` gains `select_action_with_logprob` + `ppo_update` (clipped surrogate, GAE, per-transition re-evaluation). `_train_neurocut` in `full_benchmark.py` now uses `PPOTrainer`; PPOTrainer auto-detects PPO mode. 82/82 tests passing.
 - [ ] **Save/load trained checkpoints in experiments/** — `full_benchmark.py` trains from scratch each run; cache checkpoints to `results/` so re-runs skip training.
 - [ ] **CI matrix: Windows + macOS** — current CI only covers Linux (ubuntu-latest); add Windows runner once torch_geometric has stable wheels.
 

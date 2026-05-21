@@ -285,6 +285,32 @@ class TestNeuroCUTAlgo:
             algo2 = NeuroCUTAlgo.from_checkpoint(path)
             assert algo2.name == "neurocut"
 
+    def test_ppo_interface_smoke(self):
+        """NeuroCUTAlgo exposes select_action_with_logprob + ppo_update for PPOTrainer."""
+        import torch
+        from rlgb.training.ppo import PPOTrainer, PPOConfig
+        from rlgb.tasks.graph_partition import GraphPartitionTask
+        from rlgb.data.synthetic import mini5
+        import random
+
+        algo = self._make_algo()
+        assert hasattr(algo, "select_action_with_logprob")
+        assert hasattr(algo, "ppo_update")
+
+        task = GraphPartitionTask(objective="ncut")
+        suite = mini5()[:2]
+        rng = random.Random(1)
+        env_fn = lambda: task.build_env(rng.choice(suite), horizon=3)
+
+        trainer = PPOTrainer(
+            algo=algo, env_fn=env_fn,
+            config=PPOConfig(n_episodes=8, horizon=3, log_every=8,
+                             save_every=0, out_dir="/tmp/test_ppo_ci",
+                             n_episodes_per_update=4),
+        )
+        assert trainer._ppo_mode, "PPOTrainer should detect PPO interface on NeuroCUTAlgo"
+        trainer.train()   # must not raise
+
 
 # ── Trainer end-to-end ────────────────────────────────────────────────────────
 

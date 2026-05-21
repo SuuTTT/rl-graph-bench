@@ -186,6 +186,142 @@ class NeuroCUTAlgo(RLAgent):
         self._ep_entropies.clear()
         self._ep_rewards.clear()
 
+    # ── PPO interface ─────────────────────────────────────────────────────────
+
+    def select_action_with_logprob(
+        self, obs: dict[str, np.ndarray], greedy: bool = False
+    ) -> tuple[int, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """PPO collection interface: returns (flat_action, log_prob, value, entropy).
+
+        Does NOT modify episode buffers — PPOTrainer manages its own rollout.
+        """
+        adj_t    = torch.tensor(obs["adj"],        dtype=torch.float32, device=self._device)
+        feats_t  = torch.tensor(obs["node_feats"], dtype=torch.float32, device=self._device)
+        labels_t = torch.tensor(obs["labels"],     dtype=torch.long,    device=self._device)
+        k_target = max(int(labels_t.max().item()) + 1, int(round(float(obs["k"][0]))))
+        n_cands  = int(obs.get("n_candidates", [obs["candidates"].shape[0]])[0])
+        cands_np = obs["candidates"][:n_cands]
+
+        if n_cands == 0:
+            zero = next(self._policy.parameters()).new_zeros(1).squeeze()
+            return 0, zero.detach(), zero.detach(), zero.detach()
+
+        cands_t = torch.tensor(cands_np, dtype=torch.long, device=self._device)
+        self._policy.train()
+        logits, value = self._policy(adj_t, feats_t, labels_t, cands_t, k_override=k_target)
+        dist = torch.distributions.Categorical(logits=logits)
+        idx_t = logits.argmax() if greedy else dist.sample()
+        log_prob = dist.log_prob(idx_t)
+        entropy  = dist.entropy()
+
+        idx       = int(idx_t.item())
+        node_idx  = int(cands_np[idx, 0])
+        clust_idx = int(cands_np[idx, 1])
+        return node_idx * k_target + clust_idx, log_prob, value.squeeze(), entropy
+
+    def _evaluate_action(
+        self, obs: dict[str, np.ndarray], flat_action: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Re-evaluate policy at *obs* for *flat_action*; used in PPO epochs.
+
+        Returns: (log_prob, value, entropy) with gradients intact.
+        """
+        adj_t    = torch.tensor(obs["adj"],        dtype=torch.float32, device=self._device)
+        feats_t  = torch.tensor(obs["node_feats"], dtype=torch.float32, device=self._device)
+        labels_t = torch.tensor(obs["labels"],     dtype=torch.long,    device=self._device)
+        k_target = max(int(labels_t.max().item()) + 1, int(round(float(obs["k"][0]))))
+        n_cands  = int(obs.get("n_candidates", [obs["candidates"].shape[0]])[0])
+        cands_np = obs["candidates"][:n_cands]
+
+        if n_cands == 0:
+            zero = next(self._policy.parameters()).new_zeros(1)
+            return zero.squeeze(), zero.squeeze(), zero.squeeze()
+
+        cands_t = torch.tensor(cands_np, dtype=torch.long, device=self._device)
+        self._policy.train()
+        logits, value = self._policy(adj_t, feats_t, labels_t, cands_t, k_override=k_target)
+        dist = torch.distributions.Categorical(logits=logits)
+
+        # Decode flat_action → candidate index
+        node_idx  = flat_action // k_target
+        clust_idx = flat_action % k_target
+        cand_idx  = 0  # fallback if action not found (e.g. env changed)
+        for i in range(len(cands_np)):
+            if int(cands_np[i, 0]) == node_idx and int(cands_np[i, 1]) == clust_idx:
+                cand_idx = i
+                break
+
+        idx_t    = torch.tensor(cand_idx, dtype=torch.long, device=self._device)
+        return dist.log_prob(idx_t), value.squeeze(), dist.entropy()
+
+    def ppo_update(
+        self,
+        obs_list:      list[dict],
+        actions:       list[int],
+        old_log_probs: torch.Tensor,
+        advantages:    torch.Tensor,
+        returns:       torch.Tensor,
+        clip_eps:      float = 0.2,
+        n_epochs:      int   = 4,
+        minibatch_size: int  = 32,
+        value_coef:    float = 0.5,
+        entropy_coef:  float = 0.01,
+        grad_clip:     float = 1.0,
+    ) -> dict[str, float]:
+        """PPO clipped surrogate + value loss update.
+
+        Processes each transition individually (graph sizes vary) and
+        accumulates gradients over *minibatch_size* transitions before
+        calling ``optimizer.step()``.
+        """
+        T = len(obs_list)
+        if T == 0:
+            return {}
+
+        old_log_probs = old_log_probs.to(self._device).detach()
+        advantages    = advantages.to(self._device)
+        returns_t     = returns.to(self._device)
+
+        total_policy_loss = 0.0
+        total_value_loss  = 0.0
+        total_entropy     = 0.0
+        n_updates = 0
+
+        for _ in range(n_epochs):
+            for start in range(0, T, minibatch_size):
+                batch = slice(start, min(start + minibatch_size, T))
+                batch_idx = range(*batch.indices(T))
+                self._optimizer.zero_grad()
+                p_loss = torch.zeros(1, device=self._device)
+                v_loss = torch.zeros(1, device=self._device)
+                h_sum  = torch.zeros(1, device=self._device)
+                for i in batch_idx:
+                    lp, val, ent = self._evaluate_action(obs_list[i], actions[i])
+                    ratio  = torch.exp(lp - old_log_probs[i])
+                    adv    = advantages[i]
+                    surr   = torch.min(ratio * adv,
+                                       ratio.clamp(1 - clip_eps, 1 + clip_eps) * adv)
+                    p_loss = p_loss - surr
+                    v_loss = v_loss + 0.5 * (val - returns_t[i]) ** 2
+                    h_sum  = h_sum  + ent
+                n = max(len(list(batch_idx)), 1)
+                loss = (p_loss / n
+                        + value_coef  * v_loss / n
+                        - entropy_coef * h_sum / n)
+                loss.backward()
+                nn.utils.clip_grad_norm_(self._policy.parameters(), grad_clip)
+                self._optimizer.step()
+                total_policy_loss += (p_loss / n).item()
+                total_value_loss  += (v_loss / n).item()
+                total_entropy     += (h_sum  / n).item()
+                n_updates += 1
+
+        return {
+            "ppo/policy_loss": total_policy_loss / max(n_updates, 1),
+            "ppo/value_loss":  total_value_loss  / max(n_updates, 1),
+            "ppo/entropy":     total_entropy      / max(n_updates, 1),
+        }
+
     def save(self, path: str | Path) -> None:
         torch.save({
             "policy_state_dict": self._policy.state_dict(),

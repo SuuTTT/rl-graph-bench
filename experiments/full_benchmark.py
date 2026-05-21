@@ -55,7 +55,7 @@ def parse_args():
 def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, seed: int,
                     curriculum: bool = False):
     from rlgb.algos.node_move.neurocut import NeuroCUTAlgo, NeuroCUTConfig
-    from rlgb.training.trainer import Trainer, TrainConfig
+    from rlgb.training.ppo import PPOTrainer, PPOConfig
     rng = random.Random(seed)
     algo = NeuroCUTAlgo(NeuroCUTConfig(hidden=hidden))
 
@@ -68,23 +68,26 @@ def _train_neurocut(suite, task, n_episodes: int, hidden: int, horizon: int, see
         n1 = int(n_episodes * 0.9)
         n2 = min(n_episodes - n1, 500)
         env_fn1 = lambda: task.build_env(rng.choice(suite), horizon=horizon, warm_start='random')
-        Trainer(algo=algo, env_fn=env_fn1,
-                config=TrainConfig(n_episodes=n1, horizon=horizon, lr=3e-4,
-                                   n_episode_per_update=8, log_every=n1 // 5 + 1,
-                                   save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
+        PPOTrainer(algo=algo, env_fn=env_fn1,
+                   config=PPOConfig(n_episodes=n1, horizon=horizon, lr=3e-4,
+                                    n_episodes_per_update=8,
+                                    log_every=n1 // 5 + 1,
+                                    save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
         if n2 > 0:
             rng2 = random.Random(seed + 1)
             env_fn2 = lambda: task.build_env(rng2.choice(suite), horizon=horizon, warm_start='leiden')
-            Trainer(algo=algo, env_fn=env_fn2,
-                    config=TrainConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
-                                       n_episode_per_update=8, log_every=n2 // 5 + 1,
-                                       save_every=0, out_dir="/tmp/bench_ckpts", seed=seed + 1)).train()
+            PPOTrainer(algo=algo, env_fn=env_fn2,
+                       config=PPOConfig(n_episodes=n2, horizon=horizon, lr=1e-4,
+                                        n_episodes_per_update=8,
+                                        log_every=n2 // 5 + 1,
+                                        save_every=0, out_dir="/tmp/bench_ckpts", seed=seed + 1)).train()
     else:
         env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
-        Trainer(algo=algo, env_fn=env_fn,
-                config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
-                                   n_episode_per_update=4, log_every=n_episodes // 5 + 1,
-                                   save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
+        PPOTrainer(algo=algo, env_fn=env_fn,
+                   config=PPOConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
+                                    n_episodes_per_update=4,
+                                    log_every=n_episodes // 5 + 1,
+                                    save_every=0, out_dir="/tmp/bench_ckpts", seed=seed)).train()
     return algo
 
 
