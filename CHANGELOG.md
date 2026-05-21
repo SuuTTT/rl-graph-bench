@@ -59,7 +59,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       **Performance note**: DQN needs 10k+ steps to converge (vs 50-ep quick run); full-run
       (20k steps) expected to produce competitive NCut. SS2V paper target is multicut on
       synthetic+real graphs — not directly comparable to NCut partition benchmark.
-- [ ] **Real-world loaders** — `pyg_loaders.py` + `snap_loaders.py` exist but datasets are downloaded lazily; add Cora/CiteSeer/DBLP benchmarks to `full_benchmark.py`.
+- [x] **Real-world loaders** — `pyg_loaders.real_benchmark_suite()` now called from
+      `run_partition_benchmark()`: loads Cora + CiteSeer via `load_planetoid()` and appends
+      them to the synthetic suite. BFS subsampling limits nodes (300 quick / 2000 full run).
+      `_print_paper_gap()` now reports both overall and Cora-specific NCut to track progress
+      toward paper target. On quick run (50 ep, 7 graphs incl. Cora): NeuroCUT NCut=1.99 on
+      Cora (target ≤0.333 at full training; full-run 5000 ep required for convergence).
+      DBLP loader available via `load_coauthor('CS')`; add to benchmark when DBLP targets
+      are confirmed (SS2V / SLRL use DBLP for community detection, not partition).
 - [ ] **WRT community task eval** — `CommunityEnv` + CLARE/SLRL need trained weights to compare against SLRL paper numbers.
 - [ ] **Speed: vectorised NCut** — current NCut computation is O(E) per step but runs in Python; a torch-batched version would enable GPU training.
 - [ ] **PPO replace REINFORCE** — `ppo.py` trainer exists; swap NeuroCUT training loop from REINFORCE to PPO for better sample efficiency.

@@ -180,6 +180,18 @@ def _train_slrl(suite, task, n_episodes: int, hidden: int, horizon: int, seed: i
 def run_partition_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame:
     """Graph partition: neurocut, wrt, ss2v vs leiden, louvain, spectral, random."""
     suite = mini5() if quick else fixed17()
+    # Augment with real-world graphs (Cora/CiteSeer) for paper target comparison.
+    # max_nodes capped so quick mode stays fast; downloads cached under ~/.rlgb_data/.
+    real_max_nodes = 300 if quick else 2000
+    try:
+        from rlgb.data.pyg_loaders import real_benchmark_suite
+        real_suite = real_benchmark_suite(max_nodes=real_max_nodes)
+        if real_suite:
+            suite = suite + real_suite
+            print(f"  + {len(real_suite)} real-world graphs: {[p.name for p in real_suite]}")
+    except Exception as exc:
+        print(f"  [WARN] real-world loaders skipped: {exc}")
+
     # NeuroCUT paper (KDD 2024) targets NCut; WRT paper (arXiv:2505.13986) also targets NCut.
     task  = GraphPartitionTask(objective="ncut")
 
@@ -361,6 +373,8 @@ def _print_paper_gap(df: pd.DataFrame) -> None:
         "wrt":       {"ncut": 0.060},
         "ss2v_d3qn": {},    # no public NCut target — multicut objective only
     }
+    # Show overall AND Cora-specific results (paper target is on Cora)
+    cora_df = df[df["problem"].str.lower() == "cora"] if "problem" in df.columns else pd.DataFrame()
     for algo_name, tgts in targets.items():
         sub = df[df["algo"] == algo_name]
         if sub.empty:
@@ -374,7 +388,15 @@ def _print_paper_gap(df: pd.DataFrame) -> None:
             actual = sub[metric].mean()
             gap_pct = 100 * (actual - target) / (abs(target) + 1e-9)
             status = "✓ BEAT" if actual <= target else f"△ gap={gap_pct:+.1f}%"
-            print(f"  {algo_name:<14} {metric}: actual={actual:.4f}  target≤{target}  {status}")
+            print(f"  {algo_name:<14} {metric}: actual={actual:.4f} (all graphs)  target≤{target}  {status}")
+            # Also print Cora-specific result when available
+            if not cora_df.empty:
+                sub_c = cora_df[cora_df["algo"] == algo_name]
+                if not sub_c.empty and metric in sub_c.columns:
+                    cora_actual = sub_c[metric].mean()
+                    cora_gap = 100 * (cora_actual - target) / (abs(target) + 1e-9)
+                    cora_status = "✓ BEAT" if cora_actual <= target else f"△ gap={cora_gap:+.1f}%"
+                    print(f"  {algo_name:<14} {metric}: actual={cora_actual:.4f} (Cora only)  target≤{target}  {cora_status}")
 
 
 if __name__ == "__main__":
