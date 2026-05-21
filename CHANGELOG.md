@@ -76,7 +76,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - [x] **Speed: vectorised NCut** — `ncut()` rewritten with numpy einsum (9× faster); `ncut_torch(adj, labels)` added for differentiable GPU training via autograd. Supports hard (long) and soft (float N×K) label tensors.
 - [x] **PPO replace REINFORCE** — `NeuroCUTAlgo` gains `select_action_with_logprob` + `ppo_update` (clipped surrogate, GAE, per-transition re-evaluation). `_train_neurocut` in `full_benchmark.py` now uses `PPOTrainer`; PPOTrainer auto-detects PPO mode. 82/82 tests passing.
 - [x] **Save/load trained checkpoints in experiments/** — `_ckpt_path(out_dir, name, n_ep, hidden)` + `_try_load` + `_save_ckpt` helpers added. All six `_train_*` functions check for cached checkpoint before training and save after. `run_*` benchmark functions accept `out_dir` parameter threaded from `main()`. Re-run saves ~100% of training time for unchanged hyperparams.
-- [ ] **CI matrix: Windows + macOS** — current CI only covers Linux (ubuntu-latest); add Windows runner once torch_geometric has stable wheels.
+- [x] **CI matrix: Windows + macOS** — `test` job expanded to `os: [ubuntu-latest, macos-latest, windows-latest]` with `fail-fast: false`. macOS uses default PyPI PyTorch index (arm64 compatible); Linux/Windows use `--index-url https://download.pytorch.org/whl/cpu`. `leidenalg` 0.10+ has wheels for all three platforms. `lint`, `typecheck`, and `smoke` jobs remain Linux-only.
 
 ---
 
