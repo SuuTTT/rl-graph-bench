@@ -38,6 +38,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`TrainConfig`** gains `lr_schedule: str = "none"` and `lr_min_ratio: float = 0.1`.
   All three community/dynamic `_train_*` helpers use `lr_schedule="cosine"`. `ee18334`
 
+### Experiments
+
+- **NeuroCUT h=64, 500ep (450+50), entropy=0.03, cosine LR** — greedy eval with leiden WS
+  reaches **NCut=0.4056** (= Spectral baseline), NMI=0.9674 on mini5. Gap to target +22%.
+  Confirms cosine LR + higher entropy scale well; h=128 @ 3000ep expected to go further.
+
+- **NeuroCUT h=32 A/B** — entropy=0.03 + cosine LR vs baseline (entropy=0.01, no cosine):
+  NCut 0.5186 → **0.5031** (−1.5% Δ). Improvements confirmed at small scale.
+
 - **Community / dynamic benchmark `n_ep`** raised `1000 → 3000` for paper-target
   convergence. `ba2286a`
 
