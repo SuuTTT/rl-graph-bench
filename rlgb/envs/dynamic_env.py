@@ -39,6 +39,7 @@ class DynamicCDEnv(ClusteringEnv):
         problem: Problem,
         horizon: int = 10,
         seed: int = 0,
+        warm_start: str = "random",
     ) -> None:
         super().__init__(task=task, problem=problem, horizon=horizon, seed=seed)
         self._snapshots = (
@@ -47,9 +48,33 @@ class DynamicCDEnv(ClusteringEnv):
             else [problem.adj]
         )
         self._snap_idx = 0
+        self._warm_start = warm_start
         n = problem.n
         k = problem.k_target
         self.action_space = spaces.Discrete(n * k)
+
+    def _leiden_labels(self, adj: np.ndarray) -> np.ndarray:
+        """Run Leiden on adj and return integer labels aligned to k_target."""
+        try:
+            import igraph as ig
+            import leidenalg
+            src, dst = np.where(adj > 0)
+            edges = list(zip(src.tolist(), dst.tolist()))
+            g = ig.Graph(n=adj.shape[0], edges=edges, directed=False)
+            partition = leidenalg.find_partition(g, leidenalg.ModularityVertexPartition,
+                                                 seed=0)
+            raw = np.array(partition.membership, dtype=np.int32)
+        except Exception:
+            raw = self._rng.integers(0, self.problem.k_target,
+                                     size=self.problem.n).astype(np.int32)
+            return raw
+        # Remap to k_target clusters
+        k = self.problem.k_target
+        unique = np.unique(raw)
+        remap = np.zeros(int(raw.max()) + 1, dtype=np.int32)
+        for i, u in enumerate(unique):
+            remap[u] = i % k
+        return remap[raw]
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         if seed is not None:
@@ -57,8 +82,11 @@ class DynamicCDEnv(ClusteringEnv):
         self._snap_idx = 0
         self._step_count = 0
         self.adj = self._snapshots[0].copy()
-        self.labels = self._rng.integers(0, self.problem.k_target,
-                                         size=self.problem.n).astype(np.int32)
+        if self._warm_start == "leiden":
+            self.labels = self._leiden_labels(self.adj)
+        else:
+            self.labels = self._rng.integers(0, self.problem.k_target,
+                                             size=self.problem.n).astype(np.int32)
         return self._build_base_obs(), {}
 
     def step(self, action: int):

@@ -128,7 +128,9 @@ def _train_ac2cd(suite, task, n_episodes: int, hidden: int, horizon: int, seed: 
     from rlgb.training.trainer import Trainer, TrainConfig
     rng = random.Random(seed)
     algo = AC2CDAlgo(AC2CDConfig(hidden=hidden))
-    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon)
+    # Warm-start from leiden: agent learns to track snapshot changes from good init
+    env_fn = lambda: task.build_env(rng.choice(suite), horizon=horizon,
+                                     warm_start="leiden")
     trainer = Trainer(
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
@@ -271,7 +273,10 @@ def run_dynamic_benchmark(quick: bool, seeds: int, horizon: int) -> pd.DataFrame
 
     algos = [ac2cd, LeidenBaseline()]
     print("[2/2] Evaluating …")
-    df = compare_algos(algos, suite, task, n_seeds=seeds, horizon=horizon)
+    df_ac2cd = compare_algos([ac2cd], suite, task, n_seeds=seeds, horizon=horizon,
+                              eval_kwargs={"env_kwargs": {"warm_start": "leiden"}})
+    df_cls   = compare_algos([LeidenBaseline()], suite, task, n_seeds=seeds, horizon=horizon)
+    df = pd.concat([df_ac2cd, df_cls], ignore_index=True)
     df["benchmark"] = "dynamic"
     return df
 

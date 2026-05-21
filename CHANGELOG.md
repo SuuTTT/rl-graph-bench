@@ -41,7 +41,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
       result on mini5 SBM (50 ep): WRT NCut=0.448.
       **Performance note**: paper target (NCut≤0.060) is on City Traffic graph (k=4, n=100
       road-network topology) — requires a real-world loader (see TODO #5).
-- [ ] **AC2CD training** — stub exists; A2C trainer exists; needs temporal-snapshot env integration.
+- [x] **AC2CD training** — `DynamicCDEnv` now accepts `warm_start='leiden'` (runs Leiden on
+      snapshot[0] for initial partition; falls back to random on import error). `DynamicCDTask.
+      build_env` passes `**kwargs` so `warm_start` flows through. `_train_ac2cd` and dynamic eval
+      both use `warm_start='leiden'`. Dynamic eval uses separate `compare_algos` call for AC2CD.
+      Quick-run result on synthetic 3-snapshot SBM (30 ep): AC2CD NMI=1.00 (matches Leiden).
+      **Performance note**: paper target (NMI≥0.75 on BlogCatalog3) requires a real-world dynamic
+      graph dataset — see TODO #5 (real-world loaders).
 - [ ] **SS2V-D3QN training** — stub exists; DQN trainer exists; needs edge-contraction env + replay buffer wiring.
 - [ ] **Real-world loaders** — `pyg_loaders.py` + `snap_loaders.py` exist but datasets are downloaded lazily; add Cora/CiteSeer/DBLP benchmarks to `full_benchmark.py`.
 - [ ] **WRT community task eval** — `CommunityEnv` + CLARE/SLRL need trained weights to compare against SLRL paper numbers.

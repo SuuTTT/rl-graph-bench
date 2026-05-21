@@ -25,7 +25,7 @@ class DynamicCDTask:
 
     def build_env(self, problem: "Problem", horizon: int = 10, seed: int = 0, **kwargs):
         from rlgb.envs.dynamic_env import DynamicCDEnv
-        return DynamicCDEnv(task=self, problem=problem, horizon=horizon, **kwargs)
+        return DynamicCDEnv(task=self, problem=problem, horizon=horizon, seed=seed, **kwargs)
 
     def reward(self, adj, labels_before, labels_after, problem):
         before = modularity_density(adj, labels_before)
