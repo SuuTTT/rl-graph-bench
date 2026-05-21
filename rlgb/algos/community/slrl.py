@@ -86,7 +86,7 @@ class SLRLConfig:
     n_feat: int = 1
     lr: float = 1e-3
     gamma: float = 0.99
-    entropy_coef: float = 0.01
+    entropy_coef: float = 0.03   # raised from 0.01 to encourage boundary exploration
     value_coef: float = 0.5
     grad_clip: float = 1.0
     device: str = "cpu"

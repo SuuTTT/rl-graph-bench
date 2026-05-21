@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
+import torch.optim.lr_scheduler as _lr_sched
 
 from rlgb.algos.base import RLAgent, Transition
 
@@ -52,6 +53,10 @@ class TrainConfig:
 
     # Env rotation (inductive training over a suite)
     env_rotate_every: int = 0   # 0 = auto (n_episodes//20); 1 = every episode
+
+    # Learning-rate schedule applied to algo._optimizer (if accessible)
+    lr_schedule: str = "none"   # "none" | "cosine" | "linear"
+    lr_min_ratio: float = 0.1   # LR decays to lr * lr_min_ratio at end of training
 
     # Misc
     device: str = "cpu"
@@ -103,6 +108,21 @@ class Trainer:
         env = self.env_fn()
         accumulated: list[list[Transition]] = []
 
+        # Optional LR schedule (accesses algo._optimizer if present)
+        _opt = getattr(self.algo, "_optimizer", None)
+        if _opt is not None and self.cfg.lr_schedule == "cosine":
+            _scheduler = _lr_sched.CosineAnnealingLR(
+                _opt, T_max=self.cfg.n_episodes,
+                eta_min=self.cfg.lr * self.cfg.lr_min_ratio,
+            )
+        elif _opt is not None and self.cfg.lr_schedule == "linear":
+            _scheduler = _lr_sched.LinearLR(
+                _opt, start_factor=1.0, end_factor=self.cfg.lr_min_ratio,
+                total_iters=self.cfg.n_episodes,
+            )
+        else:
+            _scheduler = None
+
         rotate_every = self.cfg.env_rotate_every or max(1, self.cfg.n_episodes // 20)
         for ep in range(1, self.cfg.n_episodes + 1):
             # Rotate env for inductive training (env_fn may return a new graph)
@@ -124,6 +144,8 @@ class Trainer:
             if len(accumulated) >= self.cfg.n_episode_per_update:
                 metrics = self.algo.update()
                 accumulated.clear()
+                if _scheduler is not None:
+                    _scheduler.step()
             else:
                 metrics = {}
 

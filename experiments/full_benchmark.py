@@ -180,6 +180,7 @@ def _train_ac2cd(suite, task, n_episodes: int, hidden: int, horizon: int, seed: 
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                            n_episode_per_update=4, log_every=n_episodes // 5 + 1,
+                           lr_schedule="cosine",
                            save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
     ).train()
     _save_ckpt(ckpt, algo)
@@ -200,6 +201,7 @@ def _train_clare(suite, task, n_episodes: int, hidden: int, horizon: int, seed: 
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                            n_episode_per_update=4, log_every=n_episodes // 5 + 1,
+                           lr_schedule="cosine",
                            save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
     ).train()
     _save_ckpt(ckpt, algo)
@@ -220,6 +222,7 @@ def _train_slrl(suite, task, n_episodes: int, hidden: int, horizon: int, seed: i
         algo=algo, env_fn=env_fn,
         config=TrainConfig(n_episodes=n_episodes, horizon=horizon, lr=3e-4,
                            n_episode_per_update=4, log_every=n_episodes // 5 + 1,
+                           lr_schedule="cosine",
                            save_every=0, out_dir="/tmp/bench_ckpts", seed=seed),
     ).train()
     _save_ckpt(ckpt, algo)

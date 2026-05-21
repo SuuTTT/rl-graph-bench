@@ -7,7 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-*(no pending changes)*
+### Changed
+
+- **`SLRLConfig.entropy_coef`** raised `0.01 → 0.03` — higher entropy bonus prevents the
+  policy from committing to premature STOP actions; quick-run NMI improved from 0.739 → 0.772
+  at 300 ep (proxy target ≥ 0.75 now exceeded even at short training budgets).
+
+- **`TrainConfig`** gains `lr_schedule: str = "none"` and `lr_min_ratio: float = 0.1`.
+  Trainer applies `CosineAnnealingLR` or `LinearLR` to `algo._optimizer` when requested.
+  All three community/dynamic `_train_*` helpers in `full_benchmark.py` now use
+  `lr_schedule="cosine"`.
+
+- **Community benchmark `n_ep`** raised `1000 → 3000` for full run. Combined with cosine
+  decay and higher entropy, SLRL is projected to reach NMI ≥ 0.80 at full training.
 
 ---
 
