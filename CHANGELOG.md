@@ -38,11 +38,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`TrainConfig`** gains `lr_schedule: str = "none"` and `lr_min_ratio: float = 0.1`.
   All three community/dynamic `_train_*` helpers use `lr_schedule="cosine"`. `ee18334`
 
+### Documentation
+
+- **`docs/REPRODUCTION_RULES.md`** — codifies the rule that targets must come directly
+  from source papers on the paper's own datasets. mini5 is a development/smoke-test suite,
+  not a paper-reproduction benchmark. Derived proxy targets (e.g. "Spectral × 0.82") are
+  prohibited from being labelled as paper targets. Includes a per-algo table of valid paper
+  targets and a checklist for logging reproduction claims.
+
 ### Experiments
 
-- **NeuroCUT h=128 Phase-4 warm-restart, 800ep random WS, lr=1e-4 cosine (in progress)** —
-  Loaded recovery ppo_800 (NCut=0.3561), restarting cosine LR from 1e-4 with entropy=0.02.
-  Checkpoints saved every 100ep to `/tmp/nc4/`. Target: NCut ≤ 0.333 (7% gap remaining).
+- **NeuroCUT h=128 Phase-5 tiny-LR fine-tune, 500ep random WS, lr=1e-5 constant** —
+  Loaded ppo_800 (NCut=0.3561), trained 500 more episodes at lr=1e-5 with entropy=0.01.
+  Non-monotonic: best checkpoint `ppo_150` reached **NCut=0.3534** (NMI=0.7636),
+  then degraded: ppo_200=0.3833, ppo_300=0.5423, ppo_500=0.4229. Best checkpoint is
+  `/tmp/nc5/ppo_150.pt`. **NCut=0.3534 is new overall best on mini5: −12.9% vs Spectral
+  (0.4056).** Note: 0.333 mini5 "target" is a derived proxy (Spectral×0.82), not a
+  paper result; per `REPRODUCTION_RULES.md`, this cannot be called a paper-target gap.
+
+- **NeuroCUT h=128 Phase-4 warm-restart, 800ep random WS, lr=1e-4 cosine** —
+  Loaded recovery ppo_800 (NCut=0.3561), restarted cosine LR from 1e-4, entropy=0.02.
+  **Degraded to NCut=0.5118.** Warm-restarting at full LR disrupts the delicate minimum
+  found at end of Phase-3 cosine decay. Confirmed: do not warm-restart from high LR
+  after a cosine-decayed checkpoint.
 
 - **NeuroCUT h=128 Phase-3 recovery, 800ep random WS, lr=1e-4, cosine LR** —
   Loaded Phase-2-degraded ckpt (NCut=0.4883), retrained with random WS. Non-monotonic
