@@ -40,13 +40,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Experiments
 
+- **NeuroCUT h=128 Phase-4 warm-restart, 800ep random WS, lr=1e-4 cosine (in progress)** —
+  Loaded recovery ppo_800 (NCut=0.3561), restarting cosine LR from 1e-4 with entropy=0.02.
+  Checkpoints saved every 100ep to `/tmp/nc4/`. Target: NCut ≤ 0.333 (7% gap remaining).
+
 - **NeuroCUT h=128 Phase-3 recovery, 800ep random WS, lr=1e-4, cosine LR** —
   Loaded Phase-2-degraded ckpt (NCut=0.4883), retrained with random WS. Non-monotonic
   recovery: ep=200→0.4883, ep=400→0.5155, ep=600→0.5102, **ep=800→0.3561** (NMI=0.7636).
   **NCut=0.3561 is a new best: −12% vs Spectral (0.4056), gap to target 0.333 reduced to 7%.**
   NMI drop (0.94→0.76) suggests model trades cluster accuracy for lower NCut.
 
-- **NeuroCUT h=128, 3000ep (2700+300), entropy=0.03/0.01, cosine LR Phase 1** —
+- **NeuroCUT h=128 Phase-1-only 3000ep (clean, no Phase 2)** —
+  NCut=0.5031 with leiden WS eval; NCut=1.1456 with random WS eval. **Fails**: model never
+  saw leiden starting distribution, cannot improve from near-optimal. Confirmed Phase-2
+  leiden exposure is *necessary* for leiden-WS eval performance. Eval horizon sweep on
+  recovery model shows h=10/25 optimal; h≥50 degrades to NCut=0.5454 (over-commits).
   Phase 1 reward peaked at 0.9249 (ep=2500). **Phase 2 leiden WS (300ep) degraded model**:
   negative reward throughout (−0.06→−0.13), final NCut=0.4883. Worse than h=64. Root cause:
   Phase 2 leiden-WS fine-tuning is counter-productive at all scales (h=32/64/128 all show
