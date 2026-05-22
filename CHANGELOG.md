@@ -7,6 +7,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Open TODOs / Roadmap
+
+> Decision tree for each algo:
+> 1. Evaluate on the **paper dataset** (not mini5) with the **paper metric**.
+> 2. If result ≥ paper target → ✅ mark reproduced.
+> 3. If result < target but within ~15% → continue training/tuning.
+> 4. If result is far from target (>30% gap) after reasonable effort → clone and run
+>    the **original authors' code** on the same dataset. If the original code also cannot
+>    reproduce the paper number, flag the result as potentially over-reported.
+
+---
+
+#### NeuroCUT — paper target: NCut ≤ 0.33 on Cora k=4 (KDD 2024 Table 3)
+
+| Step | Status | Notes |
+|------|--------|-------|
+| mini5 dev training (assist) | ✅ done | Best: NCut=0.3534 @ ppo_150 (−12.9% vs Spectral) |
+| Load/wire Cora dataset in rlgb | ⬜ TODO | Check `rlgb/data/` for existing Cora loader |
+| Train NeuroCUT h=128 on Cora, k=4 | ⬜ TODO | Use best mini5 HP: PPO, cosine LR, entropy=0.03 |
+| Eval Cora NCut vs paper 0.33 | ⬜ TODO | |
+| If gap > 30%: run original NeuroCUT code | ⬜ TODO | [github.com/idea-iitd/NeuroCUT](https://github.com/idea-iitd/NeuroCUT) |
+
+---
+
+#### CLARE — paper target: F1 ≥ 0.773 on SNAP Amazon (KDD 2022)
+
+| Step | Status | Notes |
+|------|--------|-------|
+| mini5 dev eval (assist) | ✅ done | NMI=0.812 on mini5 (different metric — not comparable to paper F1) |
+| Wire SNAP Amazon loader | ⬜ TODO | `rlgb/data/snap_loaders.py` stub exists per PAPER_TARGETS.md |
+| Eval CLARE on SNAP Amazon F1 | ⬜ TODO | Requires ground-truth community files |
+| If F1 < 0.773: continue training | ⬜ TODO | |
+| If gap > 30% after tuning: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
+
+---
+
+#### SLRL — paper target: F-score ≥ 0.878 on SNAP Amazon (AAAI 2025)
+
+| Step | Status | Notes |
+|------|--------|-------|
+| mini5 dev eval (assist) | ✅ done | NMI=0.807 on mini5 (different metric — not comparable to paper F-score) |
+| Wire SNAP Amazon loader (shared with CLARE) | ⬜ TODO | Same dependency |
+| Eval SLRL on SNAP Amazon F-score | ⬜ TODO | |
+| If F-score < 0.878: continue training | ⬜ TODO | |
+| If gap > 30% after tuning: run original SLRL code | ⬜ TODO | No public repo; reproduce from AAAI 2025 paper appendix |
+
+---
+
+#### WRT (RidgeCut) — paper target: NCut ≤ 0.060 on City Traffic n=100 k=4 (2025 preprint)
+
+| Step | Status | Notes |
+|------|--------|-------|
+| mini5 smoke-test | ✅ done | NCut=0.448 on mini5 (quick-run only, not converged) |
+| Implement WRT ring/wedge env + PPO loop properly | ⬜ TODO | `rlgb/algos/structured/wrt.py` stub |
+| Wire City Traffic dataset | ⬜ TODO | |
+| Train and eval on City Traffic | ⬜ TODO | |
+
+---
+
 ### Added
 
 - **`NodeMoveEnv` `warm_start="spectral"`** — new warm-start option initialises NeuroCUT
