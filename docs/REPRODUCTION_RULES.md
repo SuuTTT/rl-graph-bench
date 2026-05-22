@@ -46,12 +46,26 @@ Do not write "we beat NeuroCUT" based on mini5 results. That claim requires Cora
 
 ---
 
-## Rule 3 — Proxy benchmarks must be clearly labeled
+## Rule 3 — In-house benchmark datasets are first-class, but assist-only
 
-It is acceptable to track progress on mini5 or other in-house suites **as long as**:
-- The metric label says "mini5" or "internal", not the paper's dataset name
-- Results are not compared directly to paper numbers
-- The document containing the result explicitly states it is not a paper reproduction
+Synthetic or curated suites (e.g. mini5, fixed17) are **legitimate benchmark datasets in
+this repo**. Label them clearly as such (e.g. "mini5 SBM", "fixed17 synthetic") — never
+as a paper dataset name.
+
+Their role in the workflow:
+
+| Role | Allowed? | Notes |
+|------|----------|-------|
+| Smoke-test that training runs without bugs | ✅ | |
+| Hyperparameter search / A/B comparison | ✅ | Compare runs against each other, not against paper values |
+| Auxiliary eval reported alongside paper-dataset results | ✅ | Label column "mini5" clearly |
+| **Primary iteration target** (the number you optimise toward) | ❌ | Use paper datasets for that |
+| Claiming paper reproduction | ❌ | Requires paper's own dataset |
+
+**Key constraint**: the improvement-iteration loop (train → eval → decide next run) must be
+driven by results on the **paper dataset**, not by progress on an in-house suite.
+In-house metrics are assistive signal only — they may confirm a direction but must not be
+the sole justification for continuing a training campaign.
 
 ---
 
@@ -73,15 +87,16 @@ A result merely **beats our synthetic baseline** and is reported as such.
 
 ---
 
-## What mini5 results ARE useful for
+## What in-house benchmark results ARE useful for
 
 - Smoke-testing that the algorithm trains without bugs
-- Comparing hyperparameter choices relative to each other
+- Comparing hyperparameter choices **relative to each other** (not to paper numbers)
 - Establishing a local performance trend before running expensive paper-dataset evaluations
 - Checking that reward signals are positive and training is converging
 
-mini5 NCut for NeuroCUT currently stands at **0.3534** (Phase-5 ppo_150, −12.9% vs Spectral).
-This is a development metric, not a paper-reproduction claim.
+mini5 NeuroCUT currently: **NCut=0.3534** (Phase-5 ppo_150, −12.9% vs Spectral).
+This is an **assist metric** tracked in the changelog. The next iteration target is
+NeuroCUT on **Cora k=4** (paper target NCut ≤ 0.33).
 
 ---
 
