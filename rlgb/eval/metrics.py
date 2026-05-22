@@ -279,5 +279,6 @@ def compute_all(
             list(np.where(labels == c)[0]) for c in np.unique(labels)
         ]
         out["mean_f1"] = mean_f1_communities(pred_comms, gt_communities)
+        out["f1"] = out["mean_f1"]  # alias used by SLRL/CLARE paper eval
 
     return out

@@ -101,7 +101,8 @@ def eval_algo_on_suite(
                 env.close()
 
             assert best_labels is not None
-            metrics = compute_all(prob.adj, best_labels, prob.gt_labels)
+            metrics = compute_all(prob.adj, best_labels, prob.gt_labels,
+                                             gt_communities=prob.known_communities)
             metrics["problem"] = prob.name
             metrics["seed"] = seed
             metrics["algo"] = algo.name

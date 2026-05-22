@@ -47,12 +47,37 @@ def _open_maybe_gz(path: Path):
     return open(str(path), "r")
 
 
-def _parse_edgelist(path: Path, max_nodes: int) -> tuple[dict[int, int], np.ndarray]:
+def _seed_ids_from_community_file(path: Path, top_k: int) -> set[int]:
+    """Return the set of raw node IDs that appear in the first *top_k* communities."""
+    seeds: set[int] = set()
+    count = 0
+    with _open_maybe_gz(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            seeds.update(int(x) for x in line.split())
+            count += 1
+            if count >= top_k:
+                break
+    return seeds
+
+
+def _parse_edgelist(path: Path, max_nodes: int,
+                    seed_ids: set[int] | None = None) -> tuple[dict[int, int], np.ndarray]:
     """Parse SNAP edge-list; remap node ids; return (id_map, adj).
 
-    Caps the graph at max_nodes by taking the first max_nodes unique node ids
-    encountered in the file.
+    When *seed_ids* is provided (community member IDs), performs a two-pass scan:
+    - Pass 1: collect all edges incident to any seed; record seed neighbors.
+    - Assign local IDs to seeds first, then neighbors (BFS-order) until max_nodes.
+    - Pass 2 (or same pass): record edges among the selected nodes.
+
+    When no *seed_ids* given, falls back to single-pass first-max_nodes behaviour.
     """
+    if seed_ids:
+        return _parse_edgelist_seed_first(path, max_nodes, seed_ids)
+
+    # ── original single-pass path ────────────────────────────────────────────
     edges: list[tuple[int, int]] = []
     seen_order: dict[int, int] = {}
 
@@ -82,6 +107,59 @@ def _parse_edgelist(path: Path, max_nodes: int) -> tuple[dict[int, int], np.ndar
         if u < n and v < n:
             adj[u, v] = 1.0
             adj[v, u] = 1.0
+    return seen_order, adj
+
+
+def _parse_edgelist_seed_first(
+    path: Path, max_nodes: int, seed_ids: set[int]
+) -> tuple[dict[int, int], np.ndarray]:
+    """Two-pass edge-list parser that guarantees seed nodes are included.
+
+    Pass 1: read entire edge list into an adjacency-list dict.
+    Pass 2: BFS from seed_ids until max_nodes unique nodes selected.
+    Returns id_map and adjacency matrix for the selected subgraph.
+    """
+    from collections import defaultdict, deque
+
+    # Pass 1: build full adjacency list (raw node IDs)
+    raw_neighbors: dict[int, list[int]] = defaultdict(list)
+    with _open_maybe_gz(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            u, v = int(parts[0]), int(parts[1])
+            raw_neighbors[u].append(v)
+            raw_neighbors[v].append(u)
+
+    # Pass 2: BFS from seeds
+    seen_order: dict[int, int] = {}
+    queue: deque[int] = deque()
+    for s in seed_ids:
+        if s not in seen_order:
+            seen_order[s] = len(seen_order)
+            queue.append(s)
+
+    while queue and len(seen_order) < max_nodes:
+        node = queue.popleft()
+        for nb in raw_neighbors.get(node, []):
+            if nb not in seen_order:
+                seen_order[nb] = len(seen_order)
+                queue.append(nb)
+                if len(seen_order) >= max_nodes:
+                    break
+
+    # Build adjacency matrix for selected nodes
+    n = len(seen_order)
+    adj = np.zeros((n, n), dtype=np.float32)
+    for raw_id, local_id in seen_order.items():
+        for nb in raw_neighbors.get(raw_id, []):
+            nb_local = seen_order.get(nb)
+            if nb_local is not None:
+                adj[local_id, nb_local] = 1.0
     return seen_order, adj
 
 
@@ -119,7 +197,7 @@ def load_snap(
     """Load a SNAP community dataset.
 
     Args:
-        name: Dataset alias — one of 'dblp', 'amazon', 'lj', 'youtube'.
+        name: Dataset alias - one of 'dblp', 'amazon', 'lj', 'youtube'.
         root: Directory containing SNAP txt files; defaults to ~/.rlgb_data/SNAP/.
         max_nodes: Maximum nodes to load (early cutoff from edge-list).
         k_target: Override cluster count; defaults to top_k_communities.
@@ -159,7 +237,8 @@ def load_snap(
             f"Community file not found: {cpath}\nPlace in {root}/"
         )
 
-    id_map, adj = _parse_edgelist(epath, max_nodes)
+    id_map, adj = _parse_edgelist(epath, max_nodes,
+                                   seed_ids=_seed_ids_from_community_file(cpath, top_k_communities))
     n = len(id_map)
     communities = _parse_communities(cpath, id_map)[:top_k_communities]
     gt_labels = _communities_to_labels(communities, n)
