@@ -37,7 +37,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.812 on mini5 (different metric — not comparable to paper F1) |
 | Wire SNAP Amazon loader | ✅ done | `load_snap("amazon")` implemented; files downloaded to `~/.rlgb_data/SNAP/` |
-| Eval CLARE on SNAP Amazon F1 | ⬜ TODO | Next: run eval with loaded snap suite |
+| Eval CLARE on SNAP Amazon F1 | 🔄 running | `/tmp/train_snap_amazon.py` — 3000ep, objective=f1, horizon=15, log `/tmp/snap_amazon.log` |
 | If F1 < 0.773: continue training | ⬜ TODO | |
 | If gap > 30% after tuning: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
 
@@ -49,7 +49,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.807 on mini5 (different metric — not comparable to paper F-score) |
 | Wire SNAP Amazon loader (shared with CLARE) | ✅ done | Same files as CLARE |
-| Eval SLRL on SNAP Amazon F-score | ⬜ TODO | Next: run eval with loaded snap suite |
+| Eval SLRL on SNAP Amazon F-score | 🔄 running | Same script as CLARE (`/tmp/train_snap_amazon.py`) |
 | If F-score < 0.878: continue training | ⬜ TODO | |
 | If gap > 30% after tuning: run original SLRL code | ⬜ TODO | No public repo; reproduce from AAAI 2025 paper appendix |
 
