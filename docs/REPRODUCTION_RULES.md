@@ -87,6 +87,45 @@ A result merely **beats our synthetic baseline** and is reported as such.
 
 ---
 
+## Rule 6 — Follow the reproduction decision tree
+
+Every algo must move through this tree in order. Do not skip steps.
+
+```
+[1] Evaluate on paper dataset + paper metric
+          |
+          v
+    result >= target?
+    /            \
+  YES             NO
+   |               |
+  [✅ Done]    gap <= 15%?
+               /        \
+             YES          NO
+              |            |
+        [continue      gap > 30% after
+         training]      reasonable effort?
+                         /            \
+                       YES             NO
+                        |               |
+               [run original       [keep tuning]
+                authors' code]
+                        |
+                 original also fails?
+                 /               \
+               YES                NO
+                |                  |
+          [flag result as     [our impl has
+           over-reported]      a bug; debug]
+```
+
+**"Reasonable effort"** for each algo:
+- NeuroCUT: ≥ 5000 training episodes on the paper dataset, ≥ 3 random seeds
+- CLARE / SLRL: ≥ 3000 episodes, ≥ 3 seeds
+- WRT: ≥ 10k episodes (ring/wedge env is sparse reward)
+
+---
+
 ## What in-house benchmark results ARE useful for
 
 - Smoke-testing that the algorithm trains without bugs
