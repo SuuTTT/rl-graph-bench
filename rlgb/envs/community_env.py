@@ -140,6 +140,8 @@ class CommunityEnv(ClusteringEnv):
     def _build_obs(self) -> dict:
         base = self._build_base_obs()
         exc, exp = self._legal_candidates()
+        exc = exc[:self.MAX_CANDS]
+        exp = exp[:self.MAX_CANDS]
         exc_arr = np.zeros(self.MAX_CANDS, dtype=np.int32)
         exp_arr = np.zeros(self.MAX_CANDS, dtype=np.int32)
         exc_arr[:len(exc)] = exc

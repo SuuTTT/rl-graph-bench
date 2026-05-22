@@ -47,19 +47,26 @@ def _open_maybe_gz(path: Path):
     return open(str(path), "r")
 
 
-def _seed_ids_from_community_file(path: Path, top_k: int) -> set[int]:
-    """Return the set of raw node IDs that appear in the first *top_k* communities."""
-    seeds: set[int] = set()
-    count = 0
+def _read_all_communities_raw(path: Path) -> list[list[int]]:
+    """Read entire community file; return list of raw-ID member lists, sorted by size desc."""
+    all_communities: list[list[int]] = []
     with _open_maybe_gz(path) as fh:
         for line in fh:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            seeds.update(int(x) for x in line.split())
-            count += 1
-            if count >= top_k:
-                break
+            members = [int(x) for x in line.split()]
+            if len(members) >= 2:
+                all_communities.append(members)
+    all_communities.sort(key=len, reverse=True)
+    return all_communities
+
+
+def _seed_ids_from_community_file(path: Path, top_k: int) -> set[int]:
+    """Return raw node IDs in the top_k LARGEST communities (sorted by member count)."""
+    seeds: set[int] = set()
+    for c in _read_all_communities_raw(path)[:top_k]:
+        seeds.update(c)
     return seeds
 
 
@@ -163,17 +170,19 @@ def _parse_edgelist_seed_first(
     return seen_order, adj
 
 
-def _parse_communities(path: Path, id_map: dict[int, int]) -> list[list[int]]:
-    """Parse SNAP community file; return list of community node-id lists (remapped)."""
+def _parse_communities(
+    path: Path, id_map: dict[int, int], top_k: int | None = None
+) -> list[list[int]]:
+    """Read SNAP community file, sort by size desc, remap to local IDs.
+
+    Only communities whose members overlap with id_map (the loaded subgraph)
+    are returned.  Pass top_k to limit to the K largest raw communities.
+    """
     communities: list[list[int]] = []
-    with _open_maybe_gz(path) as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            members = [id_map[int(x)] for x in line.split() if int(x) in id_map]
-            if len(members) >= 2:
-                communities.append(members)
+    for raw in _read_all_communities_raw(path)[:top_k]:
+        members = [id_map[x] for x in raw if x in id_map]
+        if len(members) >= 2:
+            communities.append(members)
     return communities
 
 
@@ -240,7 +249,7 @@ def load_snap(
     id_map, adj = _parse_edgelist(epath, max_nodes,
                                    seed_ids=_seed_ids_from_community_file(cpath, top_k_communities))
     n = len(id_map)
-    communities = _parse_communities(cpath, id_map)[:top_k_communities]
+    communities = _parse_communities(cpath, id_map, top_k=top_k_communities)
     gt_labels = _communities_to_labels(communities, n)
     k = k_target or max(int(gt_labels.max()), 2)
 
