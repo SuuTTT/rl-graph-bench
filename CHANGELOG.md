@@ -19,39 +19,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-#### NeuroCUT — paper target: NCut ≤ 0.33 on Cora k=4 (KDD 2024 Table 3)
+#### NeuroCUT — paper target: NCut ≤ 0.33 on Cora k=4 (KDD 2024 Table 3) — ✅ REPRODUCED
 
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev training (assist) | ✅ done | Best: NCut=0.3534 @ ppo_150 (−12.9% vs Spectral) |
 | Load/wire Cora dataset in rlgb | ✅ done | `load_planetoid("Cora", k_target=4, max_nodes=2000)` via PyG, n=2708 |
-| Train NeuroCUT h=128 on Cora, k=4 | 🔄 running | `/tmp/train_nc_cora.py` — 3000ep, horizon=50, suite=mini5+Cora+CiteSeer, log `/tmp/nc_cora.log` |
-| Eval Cora NCut vs paper 0.33 | ⬜ TODO | Will auto-eval at end of training run |
-| If gap > 30%: run original NeuroCUT code | ⬜ TODO | [github.com/idea-iitd/NeuroCUT](https://github.com/idea-iitd/NeuroCUT) |
+| Train NeuroCUT h=128 on Cora, k=4 | ✅ done | 3000ep; best at ep=500; training killed after paper target confirmed met |
+| Eval Cora NCut vs paper 0.33 | ✅ PASSED | **NCut=0.2633 ± 0.0000** (5 seeds, ep=500), vs target ≤0.33; Spectral=0.2678. Best ckpt: `/tmp/nc_cora/ppo_500.pt` |
+| Note | ⚠️ | Our Spectral baseline (0.2678) already beats paper target (0.33). NeuroCUT slightly outperforms Spectral by 1.7%. Possible data/NCut formula divergence from paper. |
 
 ---
 
-#### CLARE — paper target: F1 ≥ 0.773 on SNAP Amazon (KDD 2022)
+#### CLARE — paper target: F1 ≥ 0.773 on SNAP Amazon (KDD 2022) — 🔄 IN PROGRESS
 
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.812 on mini5 (different metric — not comparable to paper F1) |
-| Wire SNAP Amazon loader | ✅ done | `load_snap("amazon")` implemented; files downloaded to `~/.rlgb_data/SNAP/` |
-| Eval CLARE on SNAP Amazon F1 | 🔄 running | `/tmp/train_snap_amazon.py` — 3000ep, objective=f1, horizon=15, log `/tmp/snap_amazon.log` |
-| If F1 < 0.773: continue training | ⬜ TODO | |
-| If gap > 30% after tuning: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
+| Wire SNAP Amazon loader | ✅ done | Same fixes as SLRL; top-5 communities=[328,328,312,264,154] |
+| Train CLARE on SNAP Amazon, objective=f1 | ⬜ queued | Will start automatically after SLRL v3 finishes (PID 116249); out_dir `/tmp/clare_v3` |
+| Eval CLARE vs paper 0.773 | ⬜ TODO | |
+| If gap > 30%: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
 
 ---
 
-#### SLRL — paper target: F-score ≥ 0.878 on SNAP Amazon (AAAI 2025)
+#### SLRL — paper target: F-score ≥ 0.878 on SNAP Amazon (AAAI 2025) — 🔄 IN PROGRESS
 
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.807 on mini5 (different metric — not comparable to paper F-score) |
-| Wire SNAP Amazon loader (shared with CLARE) | ✅ done | Same files as CLARE |
-| Eval SLRL on SNAP Amazon F-score | 🔄 running | Same script as CLARE (`/tmp/train_snap_amazon.py`) |
-| If F-score < 0.878: continue training | ⬜ TODO | |
-| If gap > 30% after tuning: run original SLRL code | ⬜ TODO | No public repo; reproduce from AAAI 2025 paper appendix |
+| Wire SNAP Amazon loader (shared with CLARE) | ✅ done | Fixed: BFS seed-first, sorted by size; top-5 communities=[328,328,312,264,154] |
+| Train SLRL on SNAP Amazon, objective=f1 | 🔄 running | `/tmp/train_snap_amazon_v3.py` ep=2400/3000 (approx). Rewards ≈0.0 throughout (near-zero learning). |
+| Eval SLRL ppo_2500 | ⚠️ partial | **F1=0.3794 vs target 0.878 (gap=56.8%)**. Load with `slrl.load(path)` NOT `from_checkpoint`. |
+| If gap > 30% after 3000ep: apply Rule 6 | 🔄 pending | No public SLRL repo (AAAI 2025). If final ep also fails → flag as over-reported / setup mismatch. |
 
 ---
 
