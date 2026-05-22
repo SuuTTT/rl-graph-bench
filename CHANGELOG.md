@@ -24,9 +24,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev training (assist) | ✅ done | Best: NCut=0.3534 @ ppo_150 (−12.9% vs Spectral) |
-| Load/wire Cora dataset in rlgb | ⬜ TODO | Check `rlgb/data/` for existing Cora loader |
-| Train NeuroCUT h=128 on Cora, k=4 | ⬜ TODO | Use best mini5 HP: PPO, cosine LR, entropy=0.03 |
-| Eval Cora NCut vs paper 0.33 | ⬜ TODO | |
+| Load/wire Cora dataset in rlgb | ✅ done | `load_planetoid("Cora", k_target=4, max_nodes=2000)` via PyG, n=2708 |
+| Train NeuroCUT h=128 on Cora, k=4 | 🔄 running | `/tmp/train_nc_cora.py` — 3000ep, horizon=50, suite=mini5+Cora+CiteSeer, log `/tmp/nc_cora.log` |
+| Eval Cora NCut vs paper 0.33 | ⬜ TODO | Will auto-eval at end of training run |
 | If gap > 30%: run original NeuroCUT code | ⬜ TODO | [github.com/idea-iitd/NeuroCUT](https://github.com/idea-iitd/NeuroCUT) |
 
 ---
@@ -36,8 +36,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.812 on mini5 (different metric — not comparable to paper F1) |
-| Wire SNAP Amazon loader | ⬜ TODO | `rlgb/data/snap_loaders.py` stub exists per PAPER_TARGETS.md |
-| Eval CLARE on SNAP Amazon F1 | ⬜ TODO | Requires ground-truth community files |
+| Wire SNAP Amazon loader | ✅ done | `load_snap("amazon")` implemented; files downloaded to `~/.rlgb_data/SNAP/` |
+| Eval CLARE on SNAP Amazon F1 | ⬜ TODO | Next: run eval with loaded snap suite |
 | If F1 < 0.773: continue training | ⬜ TODO | |
 | If gap > 30% after tuning: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
 
@@ -48,8 +48,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.807 on mini5 (different metric — not comparable to paper F-score) |
-| Wire SNAP Amazon loader (shared with CLARE) | ⬜ TODO | Same dependency |
-| Eval SLRL on SNAP Amazon F-score | ⬜ TODO | |
+| Wire SNAP Amazon loader (shared with CLARE) | ✅ done | Same files as CLARE |
+| Eval SLRL on SNAP Amazon F-score | ⬜ TODO | Next: run eval with loaded snap suite |
 | If F-score < 0.878: continue training | ⬜ TODO | |
 | If gap > 30% after tuning: run original SLRL code | ⬜ TODO | No public repo; reproduce from AAAI 2025 paper appendix |
 
