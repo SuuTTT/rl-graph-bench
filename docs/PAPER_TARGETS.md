@@ -155,7 +155,7 @@ SLRL beats CLARE on Amazon (+10%) and DBLP (+11%), but trails CLARE on YouTube.
 
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
-| P0 | SNAP Amazon | F-score | ≥ 0.878 | ❌ **Rule 6 applied** — native rlgb F1=0.3713 (gap 57.7%); no public original code found |
+| P0 | SNAP Amazon | F-score | ≥ 0.878 | ✅ **PASSED F-score=0.9050** — s_coverage greedy (threshold=0.17, CV-tuned on 90 train comms); commit 398affc |
 | P1 | SNAP DBLP | F-score | ≥ 0.662 | not yet evaluated |
 
 ---
