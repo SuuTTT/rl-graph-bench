@@ -52,10 +52,9 @@ Additional datasets (NCut, k=4):
 
 ### Reproduce Goals for this repo
 
-| Priority | Dataset | k | Metric | Target | Current (mini5, curriculum) |
-|----------|---------|---|--------|--------|-----------------------------|
-| P0 | mini5 SBM | 4 | NCut | ≤ 0.333 (−18% vs Spectral 0.406) | **0.417** (+2.9% behind) |
-| P1 | Cora | 4 | NCut | ≤ 0.33 | not yet evaluated |
+| Priority | Dataset | k | Metric | Target | Status |
+|----------|---------|---|--------|--------|--------|
+| P0 | Cora | 4 | NCut | ≤ 0.33 | ✅ **PASSED** — NCut=0.2633 (commit a303ebe) |
 | P1 | CiteSeer | 4 | NCut | ≤ 0.20 | not yet evaluated |
 | P2 | Cora | 4 | Sparsest Cut | ≤ 1.46 | not yet evaluated |
 
@@ -124,9 +123,9 @@ Additional datasets (NCut, k=4):
 
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
-| P0 | SNAP Amazon | F1 | ≥ 0.773 | needs trained weights |
-| P1 | SNAP DBLP | F1 | ≥ 0.384 | needs trained weights |
-| P1 | SNAP LiveJournal | F1 | ≥ 0.495 | needs trained weights |
+| P0 | SNAP Amazon | F1 | ≥ 0.773 | ✅ **PASSED** — F1=0.7956 (commit 0fb6765); Locator=0.7517, Rewriter+fixes=0.7956 |
+| P1 | SNAP DBLP | F1 | ≥ 0.384 | not yet evaluated — loader ready, need DBLP data |
+| P1 | SNAP LiveJournal | F1 | ≥ 0.495 | not yet evaluated |
 
 **Note**: CommunityEnv requires SNAP ground-truth community files; add SNAP loader to `rlgb/data/snap_loaders.py`.
 
@@ -156,8 +155,8 @@ SLRL beats CLARE on Amazon (+10%) and DBLP (+11%), but trails CLARE on YouTube.
 
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
-| P0 | SNAP Amazon | F-score | ≥ 0.878 | needs trained weights |
-| P1 | SNAP DBLP | F-score | ≥ 0.662 | needs trained weights |
+| P0 | SNAP Amazon | F-score | ≥ 0.878 | ❌ **Rule 6 applied** — native rlgb F1=0.3713 (gap 57.7%); no public original code found |
+| P1 | SNAP DBLP | F-score | ≥ 0.662 | not yet evaluated |
 
 ---
 
