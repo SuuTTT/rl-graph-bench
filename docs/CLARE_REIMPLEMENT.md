@@ -6,6 +6,11 @@ on the same dataset reproduces F1=0.7895 in ~6 minutes.  This document explains
 exactly why we fail, what the paper actually does, and how to re-implement CLARE
 natively inside rlgb.
 
+**Milestone 1 — Locator-only: DONE** ✅  
+`rlgb/algos/community/clare_locator.py` + `rlgb/data/clare_dataset.py` verified at
+**F1=0.7469 ≥ 0.73** on Amazon-1.90 test set (900 communities, bidirectional metric).
+Commit: see `CHANGELOG.md`.
+
 ---
 
 ## 1. Why the rlgb wrapper fails
@@ -299,10 +304,93 @@ numerical checkpoint so regressions are caught early.
 
 ---
 
-## 5. Notes on SLRL
+## 5. SLRL — how CLARE insights apply
 
-SLRL (AAAI 2025) has no public code.  The paper describes a similar two-phase approach
-(community seed selection + RL expansion), but without a reference implementation it
-is impossible to determine whether the rlgb failure is a wrapper bug, a
-hyperparameter gap, or a genuine over-report.  **Flagged as cannot-reproduce** until
-authors release code or respond to a replication request.
+SLRL (Ni et al., AAAI 2025) solves the **same semi-supervised community detection
+problem** as CLARE on the same Amazon-1.90 dataset, but with a simpler one-phase
+architecture: start from a query (seed) node and expand the community by repeatedly
+choosing which neighbours to include, guided by REINFORCE and a reward = delta-F1
+vs the known ground-truth community.
+
+### 5.1 What CLARE re-implementation gives us for free
+
+| Component | CLARE | SLRL |
+|-----------|-------|------|
+| `CLAREGraphData` + `load_clare_dataset()` | ✅ needed | ✅ **reuse directly** |
+| `SemiSupCommunityTask` (train 90 / val 10 / test 900) | ✅ needed | ✅ **reuse directly** |
+| Evaluation protocol (AvgF1 over 900 test communities) | ✅ needed | ✅ **reuse directly** |
+| Reward formula: `F1(pred_com, true_com) × 10` per step | ✅ needed | ✅ **same formula** |
+| Order-embedding Locator | ✅ needed | ❌ not needed |
+| Community `data_obj` (pred_com + ego-net) | ✅ needed | ❌ not needed |
+
+Four of the six core components are identical.  The only SLRL-specific piece is how
+the initial candidate community is seeded (a single query node, not a Locator output).
+
+### 5.2 How SLRL differs from CLARE
+
+SLRL is **purely seed-based and one-phase**:
+1. Pick a seed node (a known member of the target community).
+2. Build the current community = {seed} + BFS frontier candidates.
+3. For each step: policy selects one candidate to INCLUDE or outputs STOP.
+4. Reward = F1(current_community, true_community) × 10.
+
+There is no equivalent to the Locator — SLRL never needs to *find* communities; the
+evaluation protocol specifies one query node per test community.  The agent learns
+to expand from a given seed, which is a simpler task than CLARE's full retrieval +
+refinement.
+
+### 5.3 Why the rlgb wrapper still fails
+
+The rlgb `SLRLAlgo` uses the correct `Swish-MLP` architecture (matching the paper
+description), but fails for the same three dataset/reward/scope reasons as the rlgb
+CLARE wrapper:
+
+1. **Wrong dataset**: 2k-node BFS subgraph with avg community size ~278 vs the
+   Amazon-1.90 graph with 6,926 nodes and avg community size ~8.5.
+2. **Wrong reward**: macro delta-F1 over full graph vs per-community F1 against
+   the known true_com.
+3. **No semi-supervised framework**: no train/val/test split; agent never trains
+   on communities with known ground truth.
+
+### 5.4 SLRL native re-implementation plan
+
+One new file is needed — the data/task/eval layers are shared with CLARE:
+
+```
+rlgb/algos/community/slrl_native.py   ← SLRLNative: seed-expand with proper semi-sup training
+```
+
+```python
+class SLRLNative(RLAgent):
+    """SLRL: seed-expand REINFORCE on the 1.90-filtered Amazon graph.
+    
+    Training loop (per epoch, per training community):
+      seed = random member of train_com
+      current_com = {seed}
+      for step in range(max_step):
+          candidates = BFS frontier of current_com (excl. already included)
+          action = policy(seed_feat, cand_feats, current_com_emb)
+          if action == STOP: break
+          current_com.add(candidates[action])
+          reward = F1(current_com, true_com) * 10
+          REINFORCE update on (log_prob, reward)
+    """
+    compatible_tasks = ["community_semisup"]
+```
+
+Key implementation choices:
+- **Seed feat**: normalised degree of seed node (same as rlgb wrapper, correct)
+- **Candidate feats**: normalised degree of frontier nodes (same)
+- **Stop action**: K+1-th logit, not a virtual node (simpler than CLARE's virtual
+  node approach — either works)
+- **Max step**: 15 (matching paper default)
+- **Reward scaling**: × 10 (same as CLARE, critical for non-zero gradients)
+
+**Estimate**: ~150 LoC.  All infrastructure is shared with the CLARE native
+re-implementation.  SLRL native can be implemented immediately after
+`CLAREGraphData` and `SemiSupCommunityTask` are in place.
+
+**Expected result**: given that the rlgb SLRLNet architecture already mirrors the
+paper, fixing the dataset + reward alone should close most of the F1=0.37 → 0.878
+gap.  The delta between SLRL and CLARE on Amazon in the paper is only 0.878 −
+0.795 = +10%, suggesting both share the same data environment.
