@@ -37,21 +37,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.812 on mini5 (different metric — not comparable to paper F1) |
 | Wire SNAP Amazon loader | ✅ done | Same fixes as SLRL; top-5 communities=[328,328,312,264,154] |
-| Train CLARE on SNAP Amazon, objective=f1 | ⬜ queued | Will start automatically after SLRL v3 finishes (PID 116249); out_dir `/tmp/clare_v3` |
-| Eval CLARE vs paper 0.773 | ⬜ TODO | |
-| If gap > 30%: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) |
+| Train CLARE 3000ep, objective=f1 | 🔄 running | ep=600/3000, rewards ≈0.0 (same near-zero pattern as SLRL). ETA ~3.8h. PID 116249. |
+| Eval CLARE vs paper 0.773 | ⬜ TODO | Will auto-eval at end of training run |
+| If gap > 30%: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) — public repo available |
 
 ---
 
-#### SLRL — paper target: F-score ≥ 0.878 on SNAP Amazon (AAAI 2025) — 🔄 IN PROGRESS
+#### SLRL — paper target: F-score ≥ 0.878 on SNAP Amazon (AAAI 2025) — ❌ RULE 6 APPLIED
 
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.807 on mini5 (different metric — not comparable to paper F-score) |
 | Wire SNAP Amazon loader (shared with CLARE) | ✅ done | Fixed: BFS seed-first, sorted by size; top-5 communities=[328,328,312,264,154] |
-| Train SLRL on SNAP Amazon, objective=f1 | 🔄 running | `/tmp/train_snap_amazon_v3.py` ep=2400/3000 (approx). Rewards ≈0.0 throughout (near-zero learning). |
-| Eval SLRL ppo_2500 | ⚠️ partial | **F1=0.3794 vs target 0.878 (gap=56.8%)**. Load with `slrl.load(path)` NOT `from_checkpoint`. |
-| If gap > 30% after 3000ep: apply Rule 6 | 🔄 pending | No public SLRL repo (AAAI 2025). If final ep also fails → flag as over-reported / setup mismatch. |
+| Train SLRL 3000ep, objective=f1 | ✅ done | Rewards ≈0.0 throughout (near-zero learning signal). Load with `slrl.load(path)`. |
+| Final eval (ep=3000) | ❌ FAILED | **F1=0.3713 vs target 0.878 (gap=57.7%)**. Exceeds Rule 6 threshold (>30%). |
+| Rule 6: run original code | ❌ blocked | No public SLRL repo (AAAI 2025). **Verdict: flag as over-reported / setup mismatch — cannot reproduce.** |
 
 ---
 
