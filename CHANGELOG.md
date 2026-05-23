@@ -31,15 +31,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-#### CLARE — paper target: F1 ≥ 0.773 on SNAP Amazon (KDD 2022) — 🔄 IN PROGRESS
+#### CLARE — paper target: F1 ≥ 0.773 on SNAP Amazon (KDD 2022) — ✅ REPRODUCED (via original code)
 
 | Step | Status | Notes |
 |------|--------|-------|
 | mini5 dev eval (assist) | ✅ done | NMI=0.812 on mini5 (different metric — not comparable to paper F1) |
 | Wire SNAP Amazon loader | ✅ done | Same fixes as SLRL; top-5 communities=[328,328,312,264,154] |
-| Train CLARE 3000ep, objective=f1 | 🔄 running | ep=600/3000, rewards ≈0.0 (same near-zero pattern as SLRL). ETA ~3.8h. PID 116249. |
-| Eval CLARE vs paper 0.773 | ⬜ TODO | Will auto-eval at end of training run |
-| If gap > 30%: run original CLARE code | ⬜ TODO | [github.com/BUPT-GAMMA/CLARE](https://github.com/BUPT-GAMMA/CLARE) — public repo available |
+| Train CLARE 3000ep, objective=f1 (rlgb) | ❌ FAILED | F1=0.3714 vs target 0.773 (gap=52.0%). Rewards ≈0.0 throughout. |
+| Rule 6: run original CLARE code | ✅ PASSED | `FDUDSDE/KDD2022CLARE` on bundled Amazon (6926 nodes, 999 communities, seed=0): **AvgF1=0.7895 ≥ 0.773** (+2.1%). Jaccard=0.7281, NMI=0.7468. Log: `/tmp/clare_original.log` |
+| Verdict | ⚠️ | Paper result reproduced by original code. rlgb CLARE wrapper fails (F1=0.37) — **rlgb wrapper is broken for community detection on this dataset**. Root cause: different task formulation (rlgb uses per-step RL reward on subgraph; original CLARE uses Locator+Rewriter on full graph). |
 
 ---
 
