@@ -44,6 +44,7 @@ results/*.pt
 results/*.pth
 results/*.jsonl
 results/eval_*.csv
+*.pt
 
 # Quarto build output
 blog/_site/

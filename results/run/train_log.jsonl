@@ -1,0 +1,15 @@
+{"episode": 100, "mean_return": -0.25202, "mean_len": 10.0, "elapsed_s": 7.0, "pg_loss": -0.347827, "v_loss": 0.99128, "entropy": 3.338874, "loss": 0.047647}
+{"episode": 200, "mean_return": -0.21981, "mean_len": 10.0, "elapsed_s": 14.2, "pg_loss": 0.017676, "v_loss": 0.977909, "entropy": 3.379607, "loss": 0.405243}
+{"episode": 300, "mean_return": -0.19529, "mean_len": 10.0, "elapsed_s": 20.8, "pg_loss": 0.178569, "v_loss": 0.973657, "entropy": 3.26782, "loss": 0.567363}
+{"episode": 500, "mean_return": -0.26203, "mean_len": 10.0, "elapsed_s": 40.7, "pg_loss": 0.377, "v_loss": 1.046724, "entropy": 2.632987, "loss": 0.821372}
+{"episode": 1000, "mean_return": -0.07348, "mean_len": 10.0, "elapsed_s": 83.2, "pg_loss": 0.230787, "v_loss": 1.005116, "entropy": 3.04882, "loss": 0.64188}
+{"episode": 1500, "mean_return": -0.11998, "mean_len": 10.0, "elapsed_s": 125.5, "pg_loss": -0.263038, "v_loss": 1.057931, "entropy": 3.084843, "loss": 0.173382}
+{"episode": 2000, "mean_return": -0.07009, "mean_len": 10.0, "elapsed_s": 159.1, "pg_loss": -0.032883, "v_loss": 0.971918, "entropy": 2.261999, "loss": 0.385216}
+{"episode": 500, "mean_return": -0.25824, "mean_len": 10.0, "elapsed_s": 48.6, "pg_loss": 0.783554, "v_loss": 1.049447, "entropy": 2.312683, "loss": 1.285151}
+{"episode": 1000, "mean_return": -0.14438, "mean_len": 10.0, "elapsed_s": 90.8, "pg_loss": 0.072189, "v_loss": 0.85291, "entropy": 3.135542, "loss": 0.467289}
+{"episode": 1500, "mean_return": -0.22275, "mean_len": 10.0, "elapsed_s": 151.0, "pg_loss": -0.058734, "v_loss": 0.833316, "entropy": 2.811561, "loss": 0.329809}
+{"episode": 2000, "mean_return": -0.16114, "mean_len": 10.0, "elapsed_s": 187.1, "pg_loss": 0.358483, "v_loss": 0.706146, "entropy": 2.976129, "loss": 0.681794}
+{"episode": 500, "mean_return": -0.21522, "mean_len": 10.0, "elapsed_s": 35.5, "pg_loss": -0.032264, "v_loss": 0.935197, "entropy": 3.46675, "loss": 0.331333}
+{"episode": 1000, "mean_return": -0.15668, "mean_len": 10.0, "elapsed_s": 69.7, "pg_loss": 0.084406, "v_loss": 0.975201, "entropy": 3.181714, "loss": 0.476555}
+{"episode": 500, "mean_return": -0.22447, "mean_len": 10.0, "elapsed_s": 42.6, "pg_loss": -0.217949, "v_loss": 1.288937, "entropy": 3.502943, "loss": 0.39149}
+{"episode": 1000, "mean_return": -0.20385, "mean_len": 10.0, "elapsed_s": 86.0, "pg_loss": 0.38964, "v_loss": 0.551602, "entropy": 3.164748, "loss": 0.633794}
