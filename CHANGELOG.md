@@ -40,7 +40,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 | Train CLARE 3000ep, objective=f1 (rlgb) | ❌ FAILED | F1=0.3714 vs target 0.773 (gap=52.0%). Rewards ≈0.0 throughout. |
 | Rule 6: run original CLARE code | ✅ PASSED | `FDUDSDE/KDD2022CLARE` on bundled Amazon (6926 nodes, 999 communities, seed=0): **AvgF1=0.7895 ≥ 0.773** (+2.1%). Jaccard=0.7281, NMI=0.7468. Log: `/tmp/clare_original.log` |
 | **Native rlgb Locator (Milestone 1)** | ✅ **PASSED** | `rlgb/data/clare_dataset.py` + `rlgb/algos/community/clare_locator.py`. Amazon-1.90, 900 test communities, bidirectional AvgF1. **F1=0.7469 ≥ 0.73** (target). 30 epochs (~40s) on RTX 3060 Ti. |
-| Verdict | ⚠️ | Locator phase reproduced natively in rlgb. Rewriter (Milestone 2, F1≥0.773) is next. |
+| **Native rlgb Rewriter (Milestone 2)** | ✅ **PASSED** | `rlgb/algos/community/clare_rewriter.py` + `experiments/verify_clare_full.py`. REINFORCE EXCLUDE+EXPAND, GIN state updater. Key fix: clip negative EXCLUDE rewards to 0 + softmax temperature=3.0 during EXCLUDE training prevents policy collapse to "always stop". Locator F1=0.7517 → Full pipeline **F1=0.7956 ≥ 0.773** (+5.8% above target). 1000 epochs (~270s) on RTX 3060 Ti. |
+| Verdict | ✅ | Full native CLARE (Locator + Rewriter) reproduced in rlgb. F1=0.7956 vs paper 0.7895. |
 
 ---
 

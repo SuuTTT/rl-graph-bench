@@ -282,6 +282,19 @@ class CommunityLocator:
             print(f"  [Locator] embedded nodes {start}–{end}")
         return out
 
+    @torch.no_grad()
+    def get_node_embeddings(self, data: CLAREGraphData) -> np.ndarray:
+        """Return per-node GCN embeddings (N, output_dim) using the full graph.
+
+        These are the 64-dim base features consumed by the Rewriter.
+        Matches CommMatching.generate_all_node_emb() in the original code.
+        """
+        pyg = data.pyg_data.to(self.device)
+        node_emb, _ = self.encoder(pyg.x, pyg.edge_index,
+                                   torch.zeros(pyg.x.size(0), dtype=torch.long,
+                                               device=self.device))
+        return node_emb.cpu().numpy()
+
     def predict(self, data: CLAREGraphData) -> list[list[int]]:
         """Retrieve `num_pred` candidate communities by nearest-neighbour matching."""
         query_emb  = self._embed_communities(
