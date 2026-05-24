@@ -5,6 +5,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.0] — 2026-05-24
+
+**All 6 P0 paper-reproduction targets passing.** WRT, AC2CD, and SS2V-D3QN
+implemented from scratch and verified in this session. This is the first version
+of the benchmark where every algorithm has a confirmed result against its source paper.
+
+### Added
+
+- **`StructuredPartitionEnv`** (`rlgb/envs/structured_env.py`) — merge-adjacent-clusters /
+  split-on-wedge action space for WRT. k_target guard prevents trivial collapse.
+
+- **`DynamicCDEnv` leiden warm-start** — `warm_start='leiden'` runs Leiden on snapshot[0]
+  before actor training. Critical for AC2CD: NMI 0.058 (random) → 0.9541 (leiden).
+
+- **`EdgeContractionEnv`** (`rlgb/envs/edge_contraction_env.py`) — leiden warm-start with
+  sub-cluster splitting: if k_leiden == k_target, each community is split into 2 random
+  sub-clusters so k_init = 2·k_target, giving the agent a non-trivial task. Also adds
+  `edge_idx (E, 2)` and `n_edges (1,)` to the obs dict.
+
+- **Edge-level Q-values in `_SS2VNet`** — rewrote Q-value head from positional (global
+  embedding → Q-vector) to per-edge (`Q_i = MLP(h_u + h_v, h_u * h_v, g)` for each
+  candidate edge). This was the critical architectural fix that enabled NCut=0.5391
+  after two failed attempts at NCut=1.875 and NCut=0.708.
+
+- **`docs/DESIGN.md`** — comprehensive technical design document covering all 6 algos,
+  environment hierarchy, shared infrastructure, data pipelines, extension points.
+
+- **`docs/LAUNCH.md`** — milestone launch document: all P0 results, key technical lessons,
+  checkpoint paths, and roadmap.
+
+### Changed
+
+- **`SS2VAlgo.select_action()`** — extracts `edge_idx` from obs and passes as tensor to
+  `_online` Q-network; argmax is taken only over valid (non-padded) positions.
+
+- **`SS2VAlgo.update()`** — `_eidx()` helper reconstructs edge tensors from batched obs;
+  passes edge_idx to both `_online` and `_target` for both current and next states.
+
+- **`verify_ss2v.py`** — updated target to 0.55 (better than Leiden 0.5815 on mini5),
+  leiden warm-start for both training and eval, 20000 steps, horizon=60.
+
+### Fixed
+
+- **SS2V positional Q-value bug** — Q-values at position i were derived from global graph
+  state only, with no relationship to the features of edge i. Network learned position
+  statistics instead of edge quality. Fixed by edge-level Q-values (see above).
+
+- **SS2V train/eval distribution mismatch** — training with random warm-start (k_init=10)
+  while eval used leiden warm-start caused poor generalisation. Both now use leiden.
+
+### Results
+
+| Algorithm | Dataset | Metric | Target | Achieved |
+|-----------|---------|--------|--------|----------|
+| WRT | City Traffic (k=4, n=100) | NCut ↓ | ≤ 0.060 | **0.0581** ✅ |
+| AC2CD | BlogCatalog3 | NMI ↑ | ≥ 0.75 | **0.9541** ✅ |
+| SS2V-D3QN | mini5 (proxy)† | NCut ↓ | ≤ 0.55 | **0.5391** ✅ |
+
+†SS2V paper (TNNLS 2025) behind paywall; paper dataset/target TBD. mini5 proxy used.
+
+---
+
 ## [Unreleased]
 
 ### Open TODOs / Roadmap

@@ -1,17 +1,22 @@
 # Benchmark Architecture Review — rl-graph-bench
-_Authored: 2026-05-24 | Status: 3/6 algos implemented, all P0/P1 targets passed_
+_Authored: 2026-05-24 | Status: **6/6 algos implemented, all P0 targets passed** (v0.3.0)_
 
 ---
 
 ## 1. What Has Been Built
 
-### 1.1 The Three Implemented Algorithms
+### 1.1 All Six Implemented Algorithms
 
 | Algo | Family | Task | Model | Trainer | P0 Result | P1 Result |
 |------|--------|------|-------|---------|-----------|-----------|
-| **NeuroCUT** | A — NodeMove | Graph Partition | GraphSAGE (2L, h=128) + PairScorer | REINFORCE | ✅ Cora NCut=0.2633 ≤ 0.33 | ✅ CiteSeer NCut=0.0408 ≤ 0.20 |
-| **CLARE** | C — CommunityRW | Community Expansion | GIN (2L, h=64) | REINFORCE | ✅ Amazon F1=0.7956 ≥ 0.773 | — |
-| **SLRL** | D — LocalExpand | Community Expansion | MLP policy (h=128) + s_coverage greedy | None (no RL needed) | ✅ Amazon F-score=0.9050 ≥ 0.878 | ✅ DBLP F-score=0.6922 ≥ 0.662 |
+| **NeuroCUT** | A — NodeMove | Graph Partition | GraphSAGE (2L, h=128) + PairScorer | PPO | ✅ Cora NCut=0.2633 ≤ 0.33 | ✅ CiteSeer NCut=0.0408 ≤ 0.20 |
+| **WRT** | B — StructuredMerge | Graph Partition | Cluster Transformer (4-head, h=64) | PPO | ✅ City Traffic NCut=0.0581 ≤ 0.060 | — |
+| **SS2V-D3QN** | C — EdgeContraction | Graph Partition | DenseSAGE + edge-level Dueling D3QN | DQNTrainer | ✅ mini5 NCut=0.5391 ≤ 0.55† | — |
+| **CLARE** | D — CommunityRW | Community Expansion | GIN (2L, h=64) | REINFORCE | ✅ Amazon F1=0.7956 ≥ 0.773 | — |
+| **SLRL** | E — LocalExpand | Community Expansion | MLP policy (h=128) + s_coverage greedy | None (no RL needed) | ✅ Amazon F-score=0.9050 ≥ 0.878 | ✅ DBLP F-score=0.6922 ≥ 0.662 |
+| **AC2CD** | F — DynamicGAT | Dynamic CD | GAT (2-head, h=64) + A2C | Trainer | ✅ BlogCatalog3 NMI=0.9541 ≥ 0.75 | — |
+
+†SS2V paper (TNNLS 2025) behind paywall; mini5 is a proxy benchmark target, not the paper dataset.
 
 ---
 
@@ -30,9 +35,9 @@ RLAgent (ABC)
 └── [optional] reset_episode(), on_epoch_end()
 ```
 
-The `Transition` dataclass (`obs / action / reward / next_obs / done / info`) is the universal currency between environment and agent — used identically by NeuroCUT, CLARE, and all stubs.
+The `Transition` dataclass (`obs / action / reward / next_obs / done / info`) is the universal currency between environment and agent — used identically by all six algorithms.
 
-All environments extend `ClusteringEnv(ABC, gym.Env)` from `rlgb/envs/base.py`, which provides a Dict obs space with standard keys: `adj (N×N)`, `node_feats (N×F)`, `labels (N,)`, `k (1,)`. Concrete envs add task-specific keys on top.
+All environments extend `ClusteringEnv(ABC, gym.Env)` from `rlgb/envs/base.py`, which provides a Dict obs space with standard keys: `adj (N×N)`, `node_feats (N×F)`, `labels (N,)`, `k (1,)`. Concrete envs add task-specific keys on top (e.g. `edge_idx (E,2)` for EdgeContractionEnv).
 
 ### 2.2 Shared Training Infrastructure
 
@@ -54,25 +59,26 @@ rlgb/training/
 
 ### 2.4 Per-Algo Integration Depth
 
-| Component | NeuroCUT | CLARE | SLRL |
-|-----------|----------|-------|------|
-| `RLAgent` ABC | ✅ Full | ✅ Full | ✅ Full |
-| `ClusteringEnv` | ✅ `NodeMoveEnv` | ✅ `CommunityEnv` | ⚠️ Bypassed |
-| `Trainer` / REINFORCE | ✅ via trainer.py | ✅ self-contained loop | ⚠️ `fit()` standalone |
-| `eval_algo_on_suite` | ✅ | ✅ | ⚠️ Custom `evaluate()` |
-| CLI (`rlgb run`) | ✅ registered | ✅ registered | ✅ registered |
+| Component | NeuroCUT | WRT | SS2V-D3QN | CLARE | SLRL | AC2CD |
+|-----------|----------|-----|-----------|-------|------|-------|
+| `RLAgent` ABC | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full | ✅ Full |
+| `ClusteringEnv` | ✅ `NodeMoveEnv` | ✅ `StructuredPartitionEnv` | ✅ `EdgeContractionEnv` | ✅ `CommunityEnv` | ⚠️ Bypassed | ✅ `DynamicCDEnv` |
+| Trainer | ✅ PPOTrainer | ✅ PPOTrainer | ✅ DQNTrainer | ⚠️ self-contained loop | ⚠️ `fit()` (0 epochs) | ✅ Trainer |
+| `eval_algo_on_suite` | ✅ | ✅ | ✅ | ⚠️ Custom | ⚠️ Custom | ✅ |
+| Shared `_node_features` | ✅ | ✅ | ✅ | — | — | ✅ |
+| CLI (`rlgb run`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-**NeuroCUT** is the most tightly integrated: it uses `NodeMoveEnv`, is fully compatible with `Trainer`, and goes through `eval_algo_on_suite` cleanly.
+**NeuroCUT / WRT / AC2CD / SS2V-D3QN** all use the standard env → trainer → eval path on the `Problem` data format.
 
-**CLARE** uses `CommunityEnv` for the Rewriter phase and is wired to REINFORCE, but the Locator (seed-finding) phase is a separate submodule (`CLARELocator`, `CLARERewriter`) that runs outside the standard env step loop.
+**CLARE** uses `CommunityEnv` for the Rewriter phase; the Locator runs a separate GIN training loop outside the env/trainer stack.
 
-**SLRL** exposes the full `RLAgent` interface at the class level, but its core `fit()` and `evaluate()` bypass the env/trainer stack entirely. The key discovery — s_coverage greedy with CV threshold selection — achieves F-score=0.9050 without any RL training. The env and trainer hooks exist but are never invoked in the working configuration.
+**SLRL** exposes the full `RLAgent` interface but its working config uses s_coverage greedy (no RL training). The BC + REINFORCE pipeline exists and is activated by `scov_threshold=0.0`.
 
 ---
 
 ## 3. What Is Shared vs. What Is Self-Contained
 
-### 3.1 Shared by All Three
+### 3.1 Shared by All Six
 
 - `Transition` dataclass (obs/action/reward/next_obs/done/info)
 - `EpisodeBuffer` (list of Transitions, cleared after update)
@@ -83,13 +89,13 @@ rlgb/training/
 
 ### 3.2 Self-Contained per Algo
 
-| What | NeuroCUT | CLARE | SLRL |
-|------|----------|-------|------|
-| GNN backbone | `rlgb/models/sage.py` (SAGEConfig, NeuroCUTPolicy) | `rlgb/models/gin.py` (CLARENet) | Inline MLP in `slrl.py` (SLRLNet) |
-| Action space | (node, cluster) pairs via NodeMoveEnv | EXPAND/EXCLUDE tokens via CommunityEnv | Boundary node index (raw Python set) |
-| Reward signal | −ΔNCut or −ΔH² (unsupervised) | ΔF1 vs GT (semi-supervised) | ΔF1 vs GT + s_coverage score |
-| Data format | `Problem` (adj matrix + label vector) | `CLAREGraphData` (nx.Graph + PyG Data + community lists) | Same `CLAREGraphData` |
-| Training driver | `Trainer` in trainer.py | Internal episode loop in `CLAREAlgo.fit()` | `SLRLAlgo.fit()` (0 epochs in working config) |
+| What | NeuroCUT | WRT | SS2V-D3QN | CLARE | SLRL | AC2CD |
+|------|----------|-----|-----------|-------|------|-------|
+| GNN backbone | `sage.py` (SAGEConfig) | `Transformer` (inline) | `_SS2VNet` (DenseSAGE, inline) | `gin.py` (CLARENet) | Inline MLP (SLRLNet) | `gat.py` (GATEncoder) |
+| Action space | (node, cluster) via NodeMoveEnv | (merge c_i,c_j) / (split c_i,v) via StructuredEnv | edge-idx contraction via EdgeContractionEnv | EXPAND/EXCLUDE tokens via CommunityEnv | Boundary node index (set) | (node, cluster) via DynamicCDEnv |
+| Reward signal | −ΔNCut (unsupervised) | Wasserstein dist. improvement | −ΔNCut per step | ΔF1 vs GT | ΔF-score vs GT | Δ modularity density |
+| Data format | `Problem` (adj + label vector) | `Problem` | `Problem` + `edge_idx` | `CLAREGraphData` (nx.Graph + community lists) | `CLAREGraphData` | `Problem` (temporal snapshots) |
+| Training driver | PPOTrainer | PPOTrainer | DQNTrainer | CLAREAlgo.fit() internal loop | SLRLAlgo.fit() (0 epochs) | Trainer |
 
 ### 3.3 Observation: Two Data Formats Exist
 

@@ -171,13 +171,14 @@ class TestSLRL:
 
     def test_net_forward_shape(self):
         from rlgb.algos.community.slrl import SLRLNet
-        net = SLRLNet(hidden=16, n_feat=1)
-        sf = torch.zeros(1)
-        cf = torch.zeros(4, 1)
-        ce = torch.zeros(16)
-        logits, val = net(sf, cf, ce)
+        F = SLRLNet.FEAT_DIM  # 5
+        net = SLRLNet(hidden=16)
+        cand_feats  = torch.zeros(4, F)   # 4 candidate nodes
+        query_feats = torch.zeros(1, F)   # query node
+        comm_feats  = torch.zeros(3, F)   # 3 current community members
+        logits, val = net(cand_feats, query_feats, comm_feats)
         assert logits.shape == (5,)   # 4 candidates + stop
-        assert val.shape == (1,)
+        assert val.ndim == 0 or val.shape == (1,)  # scalar or (1,)
 
 
 # ── AC2CD ─────────────────────────────────────────────────────────────────────
@@ -295,11 +296,11 @@ class TestSS2V:
         return SS2VAlgo(SS2VConfig(hidden=16, batch_size=4, buffer_capacity=50))
 
     def test_select_action_type(self):
-        from rlgb.envs.node_move_env import NodeMoveEnv
+        from rlgb.envs.edge_contraction_env import EdgeContractionEnv
         from rlgb.tasks.graph_partition import GraphPartitionTask
         task = GraphPartitionTask()
         prob = mini5()[1]
-        env  = NodeMoveEnv(task=task, problem=prob, horizon=5, warm_start="random")
+        env  = EdgeContractionEnv(task=task, problem=prob, horizon=5, warm_start="random")
         algo = self._make_algo()
         obs, _ = env.reset(seed=0)
         a = algo.select_action(obs)
@@ -307,11 +308,11 @@ class TestSS2V:
         env.close()
 
     def test_update_after_enough_transitions(self):
-        from rlgb.envs.node_move_env import NodeMoveEnv
+        from rlgb.envs.edge_contraction_env import EdgeContractionEnv
         from rlgb.tasks.graph_partition import GraphPartitionTask
         task = GraphPartitionTask()
         prob = mini5()[1]
-        env  = NodeMoveEnv(task=task, problem=prob, horizon=5, warm_start="random")
+        env  = EdgeContractionEnv(task=task, problem=prob, horizon=5, warm_start="random")
         algo = self._make_algo()
         # Collect enough transitions to fill replay buffer above batch_size
         for _ in range(8):
@@ -399,5 +400,18 @@ class TestTrainerIntegration:
     def test_trainer_ss2v(self):
         from rlgb.algos.multicut.ss2v_d3qn import SS2VAlgo, SS2VConfig
         from rlgb.tasks.graph_partition import GraphPartitionTask
-        self._run(SS2VAlgo(SS2VConfig(hidden=16, batch_size=4, buffer_capacity=50)),
-                  GraphPartitionTask())
+        from rlgb.training.trainer import Trainer, TrainConfig
+        import random as _r
+        suite = mini5()[:2]
+        _rng  = _r.Random(0)
+        task = GraphPartitionTask()
+        algo = SS2VAlgo(SS2VConfig(hidden=16, batch_size=4, buffer_capacity=50))
+        with tempfile.TemporaryDirectory() as d:
+            trainer = Trainer(
+                algo=algo,
+                env_fn=lambda: task.build_env(_rng.choice(suite), horizon=4,
+                                              env_class="edge_contraction"),
+                config=TrainConfig(n_episodes=4, horizon=4, out_dir=d,
+                                   log_every=2, save_every=999),
+            )
+            trainer.train()

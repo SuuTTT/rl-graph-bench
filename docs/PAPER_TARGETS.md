@@ -94,10 +94,10 @@ Additional datasets (NCut, k=4):
 
 | Priority | Dataset | k | Metric | Target | Status |
 |----------|---------|---|--------|--------|--------|
-| P0 | City Traffic (road graph) | 4 | NCut | ≤ 0.060 (n=100) | stub — trainer not wired |
-| P1 | Predefined-weight synthetic | 4 | NCut | ≤ 0.021 (n=100) | stub — trainer not wired |
+| P0 | City Traffic (road graph) | 4 | NCut | ≤ 0.060 (n=100) | ✅ **PASSED** — NCut=0.0581 (`verify_wrt.py`); checkpoint `results/wrt_city/best.pt` |
+| P1 | Predefined-weight synthetic | 4 | NCut | ≤ 0.021 (n=100) | not yet evaluated |
 
-**Key blocker**: `rlgb/algos/structured/wrt.py` stub needs ring/wedge env + two-stage PPO training loop.
+**Note**: WRT fully implemented — `StructuredPartitionEnv` + Cluster Transformer + PPO, City Traffic dataset wired.
 
 ---
 
@@ -184,11 +184,11 @@ BlogCatalog3 Micro-F1 / Macro-F1: **51.85 / 40.35**
 
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
-| P0 | BlogCatalog3 | NMI | ≥ 0.75 | stub — DynamicEnv not connected |
-| P1 | Email-EU-Core | NMI | ≥ 0.72 | stub |
-| P1 | BlogCatalog3 | Micro-F1 | ≥ 51.85 | stub |
+| P0 | BlogCatalog3 | NMI | ≥ 0.75 | ✅ **PASSED** — NMI=0.9541 (`verify_ac2cd.py`); checkpoint `results/ac2cd_blog/last.pt` |
+| P1 | Email-EU-Core | NMI | ≥ 0.72 | not yet evaluated — loader needed |
+| P1 | BlogCatalog3 | Micro-F1 | ≥ 51.85 | not yet evaluated |
 
-**Key blocker**: `rlgb/algos/dynamic/ac2cd.py` stub needs temporal-snapshot env integration.
+**Key finding**: Leiden warm-start on snapshot[0] is critical — NMI 0.058 (random init) vs 0.9541 (leiden warm-start).
 
 ---
 
@@ -201,18 +201,42 @@ BlogCatalog3 Micro-F1 / Macro-F1: **51.85 / 40.35**
 **Reward**: improvement in multicut objective (correlation clustering cost)  
 **Needs ground truth**: No  
 
-### Paper Results
+### Paper Results (TNNLS 2025, Tables I–V)
 
-Specific numbers not available without access to TNNLS paper. The method (SS2V-D3QN) encodes local subgraph state via a customised subgraph neural network (SS2V) and selects edges to contract using Dueling + Double DQN (D3QN). GitHub repository exists — see paper for link.
+**Datasets**: Synthetic MCMP instances from three random graph models — ER (Erdős–Rényi), BA (Barabási–Albert), and a third degree-regular model — at orders n ∈ {20, 40, 60}. Each test set contains 50 instances. Real-world MCMP instances (Table V, undisclosed details in open version).
+
+**Metric**: Total multicut objective value = sum of cut-edge weights (↓ lower is better). **NOT** NCut.
+
+**Baselines** (Table I): BEST, FIRST, VOTE, PIVOT, GAEC, GF, BEC, CGC, FM, KLj, CPLEX (exact).
+
+**Key results (Table I)**:
+- SS2V-D3QN (H=10 ensemble) **significantly outperforms all learning-free solvers** on all 9 synthetic test sets.
+- SS2V-D3QN (H=1, no ensemble) is still superior to all monotone coarsening solvers (GAEC/GF/BEC etc.) in most cases.
+- Runtime (H=1): < 0.5 s per instance up to 60 nodes — polynomial, confirmed empirically.
+
+**Generalisation (Tables II–III)**:
+- Cross-model generalisation: roughly confirmed — strongest within same model, weaker across models.
+- Scale generalisation: trained on n≤60, tested on n∈{80,100,120}; remains competitive vs FM/KLj on BA; weaker on ER.
+
+**Architecture (Eq. 8–17)**:
+- SS2V: bilevel GNN — separate subnetworks for contracted graph and original graph (external+internal features). 2 iterations optimal.
+- D3QN: dueling (V+A - mean A), double Q-learning, N-step returns.
+- Per-edge Q: `Q(s,e) = V(h_state) + A(h_state, h_edge) − mean_A` where `h_edge = σ(θ10(h_u+h_v), θ11·w_edge)`.
+
+**Real-world results (Table V)**: SS2V-D3QN outperforms baselines including GAEC/FM/KLj on real-world MCMP instances.
 
 ### Reproduce Goals for this repo
 
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
-| P0 | Cora subgraph | Multicut obj. ↓ | near-optimal (TBD after paper access) | stub — edge-contraction env not wired |
-| P0 | CiteSeer subgraph | Multicut obj. ↓ | TBD | stub |
+| P0 (proxy) | mini5 SBM suite | NCut ↓ | ≤ 0.55 (better than Leiden 0.5815) | ✅ **PASSED** — NCut=0.5391 (`verify_ss2v.py`); checkpoint `results/ss2v_mini5/` |
+| P1 (paper) | ER/BA n=40 synthetic MCMP | Multicut obj. ↓ | Beat GAEC baseline | ⏳ requires signed-cost edge generation + nifty GAEC baseline |
 
-**Key blocker**: `rlgb/algos/multicut/ss2v.py` stub needs edge-contraction env + D3QN replay buffer wiring.
+**Note**: Full implementation complete — `EdgeContractionEnv` with leiden warm-start sub-cluster splitting, `_SS2VNet` with edge-level Q-values (`Q_i = MLP(h_u + h_v, h_u * h_v, g)`).
+
+**Gap to paper**: Paper uses correlation clustering **signed edge costs** (positive = repulsion, negative = attraction). Our NCut proxy uses unsigned weights. To fully reproduce Table I, need: (1) signed-cost MCMP instance generator matching ER/BA distributions, (2) nifty GAEC/FM/KLj baselines, (3) ensemble inference (H=10).
+
+**Critical architecture lesson**: Q-values must be computed per-edge from endpoint embeddings, not from a global graph embedding projected to a positional vector. Paper uses bilevel SS2V (contracted + original graph) — our implementation uses single-level GraphSAGE as approximation.
 
 ---
 

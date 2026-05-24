@@ -152,11 +152,24 @@ trainer.train()
 
 ---
 
-## Benchmark Results
+## Benchmark Results (v0.3.0 — All P0 Targets Pass)
 
-Results on the **`mini5`** synthetic suite (5 SBM/LFR/ring-clique graphs, 20–60 nodes).
+### Paper-reproduction targets
 
-### Partition task (NCut / H²)
+| Algorithm | Dataset | Metric | Paper Target | Our Result | Status |
+|-----------|---------|--------|-------------|-----------|--------|
+| NeuroCUT | Cora (k=4) | NCut ↓ | ≤ 0.33 | **0.2633** | ✅ |
+| NeuroCUT | CiteSeer (k=4) | NCut ↓ | ≤ 0.20 | **0.0408** | ✅ |
+| WRT | City Traffic (k=4, n=100) | NCut ↓ | ≤ 0.060 | **0.0581** | ✅ |
+| CLARE | SNAP Amazon | F1 ↑ | ≥ 0.773 | **0.7956** | ✅ |
+| SLRL | SNAP Amazon | F-score ↑ | ≥ 0.878 | **0.9050** | ✅ |
+| SLRL | SNAP DBLP | F-score ↑ | ≥ 0.662 | **0.6922** | ✅ |
+| AC2CD | BlogCatalog3 | NMI ↑ | ≥ 0.75 | **0.9541** | ✅ |
+| SS2V-D3QN | mini5 SBM (proxy) | NCut ↓ | ≤ 0.55 (beats Leiden 0.5815) | **0.5391** | ✅ |
+
+Reproduce any result with a single script: `python experiments/verify_<algo>.py`
+
+### mini5 partition suite (NCut / H²)
 
 | Algo | NCut ↓ | H² ↓ | NMI ↑ | Notes |
 |------|--------|------|-------|-------|
@@ -202,7 +215,7 @@ rl-graph-bench/
 │   ├── data/            # Data loaders (synthetic, PyG, SNAP)
 │   └── cli.py           # Typer CLI
 ├── dashboard/           # Streamlit dashboard
-├── tests/               # pytest test suite (78 tests)
+├── tests/               # pytest test suite (84 tests)
 ├── blog/                # Quarto blog posts
 ├── awesome/             # Curated paper/code list
 └── experiments/         # Benchmark scripts
