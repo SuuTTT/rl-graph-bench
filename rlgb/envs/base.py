@@ -94,17 +94,15 @@ class ClusteringEnv(ABC, gym.Env):
         sizes = np.bincount(self.labels, minlength=k).astype(np.float32)
         cluster_size_ratio = sizes[self.labels] / n      # (N,)
 
-        # Intra-cluster degree
-        intra = np.array([
-            adj[i, self.labels == self.labels[i]].sum() for i in range(n)
-        ], dtype=np.float32)
+        # Intra-cluster degree — vectorized (no Python loop over nodes)
+        same_cluster = (self.labels[:, None] == self.labels[None, :])  # (N, N) bool
+        intra = (adj * same_cluster).sum(axis=1).astype(np.float32)    # (N,)
         intra_ratio = intra / (deg + 1e-9)               # (N,)
 
-        # Simple clustering coefficient proxy
+        # Triangle proxy — vectorized: tri[i] = sum_j adj[i,j] * (A²)[i,j]
+        adj2 = adj @ adj                                 # (N, N), single matmul
+        tri = (adj * adj2).sum(axis=1).astype(np.float32)  # (N,)
         vol = (deg * (deg - 1))
-        tri = np.array([
-            (adj[i] @ adj[:, np.where(adj[i] > 0)[0]]).sum() for i in range(n)
-        ], dtype=np.float32)
         cc = np.where(vol > 0, tri / (vol + 1e-9), 0.0)
 
         # Normalise

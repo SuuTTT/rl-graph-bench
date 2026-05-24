@@ -99,18 +99,26 @@ class AC2CDAlgo(RLAgent):
         self._buffer = EpisodeBuffer()
 
     def select_action(self, obs: dict, greedy: bool = False) -> int:
-        adj_t    = torch.tensor(obs["adj"],        dtype=torch.float32, device=self._device)
-        feats_t  = torch.tensor(obs["node_feats"], dtype=torch.float32, device=self._device)
-        labels_t = torch.tensor(obs["labels"],     dtype=torch.long,    device=self._device)
-        k = int(labels_t.max().item()) + 1
+        adj_np    = np.ascontiguousarray(obs["adj"],        dtype=np.float32)
+        feats_np  = np.ascontiguousarray(obs["node_feats"], dtype=np.float32)
+        adj_t    = torch.from_numpy(adj_np).to(self._device)
+        feats_t  = torch.from_numpy(feats_np).to(self._device)
+        labels_np = obs["labels"]          # numpy array — use on CPU to avoid GPU syncs
+        labels_t  = torch.from_numpy(np.ascontiguousarray(labels_np, dtype=np.int64)).to(self._device)
+        k = int(labels_np.max()) + 1
         N = adj_t.shape[0]
-        # All legal (node, cluster) pairs
-        cands = torch.tensor(
-            [[n, c] for n in range(N) for c in range(k) if labels_t[n] != c],
-            dtype=torch.long, device=self._device,
-        )
-        if cands.shape[0] == 0:
+        # Vectorized candidate generation (use numpy to avoid 200 GPU→CPU syncs)
+        if "candidates" in obs and "n_candidates" in obs:
+            # Use precomputed candidates from NodeMoveEnv
+            n_cands = int(obs["n_candidates"][0])
+            cands_np = obs["candidates"][:n_cands]
+        else:
+            node_idx, clust_idx = np.meshgrid(np.arange(N), np.arange(k), indexing="ij")
+            valid = labels_np[node_idx] != clust_idx
+            cands_np = np.stack([node_idx[valid], clust_idx[valid]], axis=1)
+        if len(cands_np) == 0:
             return 0
+        cands = torch.tensor(cands_np, dtype=torch.long, device=self._device)
 
         if greedy:
             with torch.no_grad():

@@ -1,0 +1,9 @@
+{"episode": 300, "mean_return": -0.00157, "mean_len": 30.0, "elapsed_s": 304.4}
+{"episode": 600, "mean_return": 0.00311, "mean_len": 30.0, "elapsed_s": 622.2, "pg_loss": -0.009771, "v_loss": 0.995503, "entropy": 6.684594, "loss": 0.354288}
+{"episode": 300, "mean_return": 0.00572, "mean_len": 30.0, "elapsed_s": 143.8}
+{"episode": 300, "mean_return": -0.0013, "mean_len": 30.0, "elapsed_s": 96.2}
+{"episode": 600, "mean_return": 0.02215, "mean_len": 30.0, "elapsed_s": 190.5, "pg_loss": 0.126392, "v_loss": 0.996317, "entropy": 5.991433, "loss": 0.504721}
+{"episode": 900, "mean_return": 0.00164, "mean_len": 30.0, "elapsed_s": 288.9}
+{"episode": 1200, "mean_return": 0.00744, "mean_len": 30.0, "elapsed_s": 388.5, "pg_loss": 0.005011, "v_loss": 0.994984, "entropy": 5.990614, "loss": 0.382691}
+{"episode": 1500, "mean_return": 0.03, "mean_len": 30.0, "elapsed_s": 483.6}
+{"episode": 1800, "mean_return": 0.03711, "mean_len": 30.0, "elapsed_s": 580.8, "pg_loss": 0.096796, "v_loss": 0.977663, "entropy": 5.976684, "loss": 0.466094}

@@ -28,9 +28,10 @@ from rlgb.training.reinforce import REINFORCEConfig, compute_returns, reinforce_
 
 @dataclass
 class WRTConfig:
-    hidden: int = 64
+    hidden: int = 128
     n_heads: int = 4
     n_layers: int = 2
+    cluster_feat_dim: int = 4   # [mean_deg/N, size/N, intra_density, cut/E]
     lr: float = 3e-4
     gamma: float = 0.99
     entropy_coef: float = 0.01
@@ -44,7 +45,8 @@ class _WRTNet(nn.Module):
 
     def __init__(self, cfg: WRTConfig) -> None:
         super().__init__()
-        self.cluster_proj = nn.Linear(1, cfg.hidden)   # cluster-size feature → H
+        cfd = getattr(cfg, "cluster_feat_dim", 4)
+        self.cluster_proj = nn.Linear(cfd, cfg.hidden)  # cluster features → H
         enc_layer = nn.TransformerEncoderLayer(
             d_model=cfg.hidden, nhead=cfg.n_heads, dim_feedforward=cfg.hidden * 2,
             batch_first=True, dropout=0.0,
@@ -60,13 +62,30 @@ class _WRTNet(nn.Module):
         """Returns (merge_logits (P,), split_logits (K,), value (1,))."""
         N = adj.shape[0]
         k = int(labels.max().item()) + 1
-        # Cluster features: [mean_degree_of_cluster / N] shape (K, 1)
         deg = adj.sum(dim=1)   # (N,)
-        c_feat = torch.zeros(k, 1, device=adj.device)
-        for c in range(k):
-            mask = labels == c
-            if mask.any():
-                c_feat[c, 0] = deg[mask].mean() / N
+        total_edges = adj.sum() / 2.0 + 1e-9
+        cfd = self.cluster_proj.in_features
+
+        # Vectorized cluster features — avoid per-cluster Python loops
+        c_feat = torch.zeros(k, cfd, device=adj.device)
+        one_hot = torch.zeros(N, k, device=adj.device)
+        one_hot.scatter_(1, labels.view(-1, 1), 1.0)           # (N, k)
+        sizes   = one_hot.sum(0)                                 # (k,)
+        # mean_deg per cluster
+        c_feat[:, 0] = (one_hot.T @ deg) / (sizes.clamp(min=1) * N)
+        if cfd > 1:
+            c_feat[:, 1] = sizes / N
+        if cfd > 2:
+            # intra-cluster edges: diag of (one_hot.T @ adj @ one_hot) / 2
+            intra = (one_hot.T @ adj @ one_hot).diagonal() / 2.0
+            max_intra = sizes * (sizes - 1) / 2.0
+            c_feat[:, 2] = intra / (max_intra + 1e-9)
+        if cfd > 3:
+            # cut per cluster = vol(c) - 2*intra
+            vol = one_hot.T @ deg                                # (k,)
+            intra_here = (one_hot.T @ adj @ one_hot).diagonal() / 2.0
+            cut = vol - 2.0 * intra_here
+            c_feat[:, 3] = cut / (2.0 * total_edges)
         h = self.cluster_proj(c_feat).unsqueeze(0)       # (1, K, H)
         h = self.transformer(h).squeeze(0)               # (K, H)
 
@@ -85,19 +104,22 @@ class _WRTNet(nn.Module):
 
 
 def _adjacent_cluster_pairs(adj: torch.Tensor, labels: torch.Tensor, k: int) -> list[tuple[int, int]]:
-    """Find cluster pairs with at least one inter-cluster edge."""
-    seen: set[tuple[int, int]] = set()
-    pairs: list[tuple[int, int]] = []
-    mask = adj > 0
-    for i in range(adj.shape[0]):
-        for j in (mask[i].nonzero(as_tuple=True)[0]).tolist():
-            ci, cj = int(labels[i].item()), int(labels[j].item())
-            if ci != cj:
-                key = (min(ci, cj), max(ci, cj))
-                if key not in seen:
-                    seen.add(key)
-                    pairs.append(key)
-    return pairs
+    """Find cluster pairs with at least one inter-cluster edge (vectorized)."""
+    # Fully vectorized: no Python loops over nodes → avoids GPU→CPU sync overhead
+    nz_i, nz_j = (adj > 0).nonzero(as_tuple=True)
+    if nz_i.numel() == 0:
+        return []
+    ci = labels[nz_i]
+    cj = labels[nz_j]
+    diff = ci != cj
+    if not diff.any():
+        return []
+    ci_d = ci[diff]
+    cj_d = cj[diff]
+    pair_lo = torch.min(ci_d, cj_d)
+    pair_hi = torch.max(ci_d, cj_d)
+    pair_ids = (pair_lo * k + pair_hi).unique()
+    return [(int(uid) // k, int(uid) % k) for uid in pair_ids.cpu()]
 
 
 class WRTAlgo(RLAgent):

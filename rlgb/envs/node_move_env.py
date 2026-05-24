@@ -160,17 +160,14 @@ class NodeMoveEnv(ClusteringEnv):
         self.labels = _canonicalize(self.labels)
 
     def _legal_candidates(self) -> np.ndarray:
-        """Return (M, 2) array of legal (node, cluster) pairs."""
+        """Return (M, 2) array of legal (node, cluster) pairs — vectorized."""
         n = self.problem.n
         k = self.problem.k_target
-        cands = []
-        for node in range(n):
-            for c in range(k):
-                if self.labels[node] != c:
-                    cands.append([node, c])
-        if not cands:
-            return np.zeros((0, 2), dtype=np.int32)
-        return np.array(cands, dtype=np.int32)
+        node_idx  = np.repeat(np.arange(n), k)          # [0,0,..,0, 1,1,..,1, ...]
+        clust_idx = np.tile(np.arange(k), n)             # [0,1,..,k-1, 0,1,..,k-1, ...]
+        valid = self.labels[node_idx] != clust_idx
+        cands = np.stack([node_idx[valid], clust_idx[valid]], axis=1).astype(np.int32)
+        return cands
 
     def _build_obs(self) -> dict:
         base = self._build_base_obs()

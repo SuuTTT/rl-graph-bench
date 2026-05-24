@@ -50,30 +50,65 @@ class _DuelingHead(nn.Module):
 
 
 class _SS2VNet(nn.Module):
-    """Subgraph encoder + dueling Q-head. Uses dense SAGE."""
+    """SAGE encoder + edge-level Q-values.
+
+    Q-value for each candidate edge is computed from the embeddings of the
+    two endpoint nodes, so the network can differentiate edges by their local
+    structure rather than position.  This is critical for identifying which
+    pairs of leiden sub-clusters belong to the same community.
+    """
 
     GRAPH_FEAT_DIM = 3
 
     def __init__(self, feat_dim: int, hidden: int, n_layers: int, max_edges: int) -> None:
         super().__init__()
+        self._max_edges = max_edges
         dims = [feat_dim] + [hidden] * n_layers
         layers = []
         for i in range(n_layers):
             layers.append(nn.Linear(dims[i] * 2, dims[i + 1]))
         self.sage_layers = nn.ModuleList(layers)
         self.graph_proj = nn.Linear(self.GRAPH_FEAT_DIM, hidden)
-        self.head = _DuelingHead(hidden * 2, max_edges)
+        # Edge scorer: (h_u + h_v || h_u * h_v || g) → Q
+        self.edge_scorer = nn.Sequential(
+            nn.Linear(hidden * 3, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden // 2),
+            nn.ReLU(),
+            nn.Linear(hidden // 2, 1),
+        )
 
-    def forward(self, feats: torch.Tensor, adj: torch.Tensor, graph_feat: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        feats: torch.Tensor,
+        adj: torch.Tensor,
+        graph_feat: torch.Tensor,
+        edge_idx: torch.Tensor,     # (n_cands, 2) — node indices for each candidate
+    ) -> torch.Tensor:
         h = feats
         deg = adj.sum(1, keepdim=True).clamp(min=1.0)
         adj_norm = adj / deg
         for layer in self.sage_layers:
             agg = adj_norm @ h
             h = F.relu(layer(torch.cat([h, agg], dim=1)))
-        g_proj = self.graph_proj(graph_feat)             # (hidden,)
-        g = torch.cat([h.mean(0), g_proj], dim=0)        # (hidden*2,)
-        return self.head(g.unsqueeze(0)).squeeze(0)       # (max_edges,)
+
+        g = self.graph_proj(graph_feat)  # (hidden,)
+
+        n_cands = edge_idx.shape[0]
+        if n_cands == 0:
+            return torch.zeros(self._max_edges, device=feats.device)
+
+        u_emb = h[edge_idx[:, 0]]                              # (n_cands, hidden)
+        v_emb = h[edge_idx[:, 1]]                              # (n_cands, hidden)
+        g_exp = g.unsqueeze(0).expand(n_cands, -1)             # (n_cands, hidden)
+        ef    = torch.cat([u_emb + v_emb, u_emb * v_emb, g_exp], dim=1)  # (n_cands, hidden*3)
+        q     = self.edge_scorer(ef).squeeze(1)                # (n_cands,)
+
+        # Pad to fixed max_edges size (unused slots will be masked by caller)
+        padded = torch.zeros(self._max_edges, device=feats.device)
+        n = min(n_cands, self._max_edges)
+        padded[:n] = q[:n]
+        return padded
 
 
 class SS2VAlgo(RLAgent):
@@ -109,24 +144,19 @@ class SS2VAlgo(RLAgent):
         return cfg.epsilon_end + decay
 
     def select_action(self, obs: dict, greedy: bool = False) -> int:
-        """Select an inter-cluster edge to contract.
-
-        Returns the edge index (0..n_inter_edges-1) to be applied by
-        EdgeContractionEnv.step().  Falls back to NodeMove semantics when
-        running in a NodeMoveEnv (for backwards compatibility with tests).
-        """
-        adj_t    = torch.tensor(obs["adj"],        dtype=torch.float32, device=self._device)
-        feats_t  = torch.tensor(obs["node_feats"], dtype=torch.float32, device=self._device)
-        labels_t = torch.tensor(obs["labels"],     dtype=torch.long,    device=self._device)
-        N = adj_t.shape[0]
-        k = int(labels_t.max().item()) + 1
-
-        # Count valid inter-cluster edges
+        """Select an inter-cluster edge to contract."""
         adj_np    = obs["adj"]
         labels_np = obs["labels"]
-        rows, cols = np.where(adj_np > 0)
-        inter_mask = (labels_np[rows] != labels_np[cols]) & (rows < cols)
-        n_edges = int(inter_mask.sum())
+        N = len(labels_np)
+        k = int(labels_np.max()) + 1
+
+        # Use pre-computed n_edges if available, else compute from obs
+        if "n_edges" in obs:
+            n_edges = int(obs["n_edges"][0])
+        else:
+            rows, cols = np.where(adj_np > 0)
+            inter_mask = (labels_np[rows] != labels_np[cols]) & (rows < cols)
+            n_edges = int(inter_mask.sum())
 
         if n_edges == 0:
             return 0
@@ -136,14 +166,22 @@ class SS2VAlgo(RLAgent):
         if not greedy and random.random() < self._eps:
             idx = random.randrange(n_cands)
         else:
-            g_feat = torch.tensor([N, k, float(adj_t.sum().item()) / max(N, 1)],
-                                  dtype=torch.float32, device=self._device)
+            adj_t   = torch.from_numpy(np.ascontiguousarray(adj_np, dtype=np.float32)).to(self._device)
+            feats_t = torch.from_numpy(np.ascontiguousarray(obs["node_feats"], dtype=np.float32)).to(self._device)
+            g_feat  = torch.tensor([N, k, float(adj_np.sum()) / max(N, 1)],
+                                   dtype=torch.float32, device=self._device)
+            if "edge_idx" in obs and obs["edge_idx"].shape[0] > 0:
+                eidx_t = torch.from_numpy(
+                    np.ascontiguousarray(obs["edge_idx"][:n_cands], dtype=np.int64)
+                ).to(self._device)
+            else:
+                eidx_t = torch.zeros((0, 2), dtype=torch.int64, device=self._device)
             with torch.no_grad():
-                q = self._online(feats_t, adj_t, g_feat)[:n_cands]
+                q = self._online(feats_t, adj_t, g_feat, eidx_t)[:n_cands]
             idx = int(q.argmax().item())
 
         self._step += 1
-        return idx  # edge index in [0, n_cands)
+        return idx
 
     def push_transition(self, t: Transition) -> None:
         self._replay.push(t)
@@ -154,25 +192,44 @@ class SS2VAlgo(RLAgent):
         batch = self._replay.sample(self._cfg.batch_size, self._rng)
         total_loss = 0.0
         for t in batch:
-            adj_t    = torch.tensor(t.obs["adj"],        dtype=torch.float32, device=self._device)
-            feats_t  = torch.tensor(t.obs["node_feats"], dtype=torch.float32, device=self._device)
-            N = adj_t.shape[0]
-            labels_t = torch.tensor(t.obs["labels"], dtype=torch.long, device=self._device)
-            k = int(labels_t.max().item()) + 1
-            g_feat  = torch.tensor([N, k, float(adj_t.sum().item()) / max(N, 1)],
-                                   dtype=torch.float32, device=self._device)
-            q_vals  = self._online(feats_t, adj_t, g_feat)
-            # action IS the edge index directly
+            # Use numpy for cheap CPU metadata to avoid GPU→CPU syncs
+            labels_np = t.obs["labels"]
+            k         = int(labels_np.max()) + 1
+            N         = len(labels_np)
+            adj_sum   = float(np.sum(t.obs["adj"]))
+
+            adj_t    = torch.from_numpy(np.ascontiguousarray(t.obs["adj"], dtype=np.float32)).to(self._device)
+            feats_t  = torch.from_numpy(np.ascontiguousarray(t.obs["node_feats"], dtype=np.float32)).to(self._device)
+            labels_t = torch.from_numpy(np.ascontiguousarray(labels_np, dtype=np.int64)).to(self._device)
+            g_feat   = torch.tensor([N, k, adj_sum / max(N, 1)],
+                                    dtype=torch.float32, device=self._device)
+            def _eidx(ob: dict, n_valid: int) -> torch.Tensor:
+                if "edge_idx" in ob and ob["edge_idx"].shape[0] > 0:
+                    return torch.from_numpy(
+                        np.ascontiguousarray(ob["edge_idx"][:n_valid], dtype=np.int64)
+                    ).to(self._device)
+                return torch.zeros((0, 2), dtype=torch.int64, device=self._device)
+
+            n_valid_cur = int(t.obs.get("n_edges", [self.MAX_EDGES])[0])
+            n_valid_cur = max(1, min(n_valid_cur, self.MAX_EDGES))
+            eidx_cur    = _eidx(t.obs, n_valid_cur)
+            q_vals  = self._online(feats_t, adj_t, g_feat, eidx_cur)
             act_idx = min(int(t.action), self.MAX_EDGES - 1)
             q_pred  = q_vals[act_idx]
             with torch.no_grad():
-                adj_n  = torch.tensor(t.next_obs["adj"], dtype=torch.float32, device=self._device)
-                feat_n = torch.tensor(t.next_obs["node_feats"], dtype=torch.float32, device=self._device)
-                lab_n  = torch.tensor(t.next_obs["labels"], dtype=torch.long, device=self._device)
-                k_n    = int(lab_n.max().item()) + 1
-                g2     = torch.tensor([N, k_n, float(adj_n.sum().item()) / max(N, 1)],
+                lab_n_np = t.next_obs["labels"]
+                k_n      = int(lab_n_np.max()) + 1
+                adj_n_sum = float(np.sum(t.next_obs["adj"]))
+                adj_n  = torch.from_numpy(np.ascontiguousarray(t.next_obs["adj"], dtype=np.float32)).to(self._device)
+                feat_n = torch.from_numpy(np.ascontiguousarray(t.next_obs["node_feats"], dtype=np.float32)).to(self._device)
+                g2     = torch.tensor([N, k_n, adj_n_sum / max(N, 1)],
                                       dtype=torch.float32, device=self._device)
-                q_next = self._target(feat_n, adj_n, g2).max()
+                n_valid_next = int(t.next_obs.get("n_edges", [self.MAX_EDGES])[0])
+                n_valid_next = max(1, min(n_valid_next, self.MAX_EDGES))
+                eidx_next     = _eidx(t.next_obs, n_valid_next)
+                q_online_next = self._online(feat_n, adj_n, g2, eidx_next)
+                best_next_act = int(q_online_next[:n_valid_next].argmax().item())
+                q_next = self._target(feat_n, adj_n, g2, eidx_next)[best_next_act]
                 q_tgt  = t.reward + self._cfg.gamma * q_next * (1 - float(t.done))
             total_loss += F.smooth_l1_loss(q_pred, q_tgt)
 
