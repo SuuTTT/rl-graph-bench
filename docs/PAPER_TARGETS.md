@@ -55,7 +55,7 @@ Additional datasets (NCut, k=4):
 | Priority | Dataset | k | Metric | Target | Status |
 |----------|---------|---|--------|--------|--------|
 | P0 | Cora | 4 | NCut | ≤ 0.33 | ✅ **PASSED** — NCut=0.2633 (commit a303ebe) |
-| P1 | CiteSeer | 4 | NCut | ≤ 0.20 | not yet evaluated |
+| P1 | CiteSeer | 4 | NCut | ≤ 0.20 | ✅ **PASSED** — NCut=0.0408 (eval_neurocut_citeseer.py) |
 | P2 | Cora | 4 | Sparsest Cut | ≤ 1.46 | not yet evaluated |
 
 **Gap to close**: ~5k episodes on fixed17/Cora-sized graphs; larger hidden size (256); best-of-5 eval.
@@ -156,7 +156,7 @@ SLRL beats CLARE on Amazon (+10%) and DBLP (+11%), but trails CLARE on YouTube.
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
 | P0 | SNAP Amazon | F-score | ≥ 0.878 | ✅ **PASSED F-score=0.9050** — s_coverage greedy (threshold=0.17, CV-tuned on 90 train comms); commit 398affc |
-| P1 | SNAP DBLP | F-score | ≥ 0.662 | not yet evaluated |
+| P1 | SNAP DBLP | F-score | ≥ 0.662 | ✅ **PASSED** — F-score=0.6922 (verify_slrl_dblp.py, thr=0.30) |
 
 ---
 
