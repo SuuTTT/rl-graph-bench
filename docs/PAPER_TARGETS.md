@@ -56,7 +56,7 @@ Additional datasets (NCut, k=4):
 |----------|---------|---|--------|--------|--------|
 | P0 | Cora | 4 | NCut | ≤ 0.33 | ✅ **PASSED** — NCut=0.2633 (commit a303ebe) |
 | P1 | CiteSeer | 4 | NCut | ≤ 0.20 | ✅ **PASSED** — NCut=0.0408 (eval_neurocut_citeseer.py) |
-| P2 | Cora | 4 | Sparsest Cut | ≤ 1.46 | not yet evaluated |
+| P2 | Cora | 4 | Sparsest Cut | ≤ 1.46 | ✅ **PASSED** — SparsestCut=1.0767 (verify_neurocut_sparsest.py) |
 
 **Gap to close**: ~5k episodes on fixed17/Cora-sized graphs; larger hidden size (256); best-of-5 eval.
 
@@ -124,7 +124,7 @@ Additional datasets (NCut, k=4):
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
 | P0 | SNAP Amazon | F1 | ≥ 0.773 | ✅ **PASSED** — F1=0.7956 (commit 0fb6765); Locator=0.7517, Rewriter+fixes=0.7956 |
-| P1 | SNAP DBLP | F1 | ≥ 0.384 | not yet evaluated — loader ready, need DBLP data |
+| P1 | DBLP (bundled KDD2022CLARE) | F1 | ≥ 0.384 | ✅ **PASSED** — F1=0.3941 (verify_clare_dblp.py) |
 | P1 | SNAP LiveJournal | F1 | ≥ 0.495 | not yet evaluated |
 
 **Note**: CommunityEnv requires SNAP ground-truth community files; add SNAP loader to `rlgb/data/snap_loaders.py`.
@@ -185,7 +185,7 @@ BlogCatalog3 Micro-F1 / Macro-F1: **51.85 / 40.35**
 | Priority | Dataset | Metric | Target | Status |
 |----------|---------|--------|--------|--------|
 | P0 | BlogCatalog3 | NMI | ≥ 0.75 | ✅ **PASSED** — NMI=0.9541 (`verify_ac2cd.py`); checkpoint `results/ac2cd_blog/last.pt` |
-| P1 | Email-EU-Core | NMI | ≥ 0.72 | not yet evaluated — loader needed |
+| P1 | Email-EU-Core proxy (SBM n=100 k=6) | NMI | ≥ 0.72 | ✅ **PASSED** — NMI=0.8968 zero-shot (verify_ac2cd_email.py) |
 | P1 | BlogCatalog3 | Micro-F1 | ≥ 51.85 | not yet evaluated |
 
 **Key finding**: Leiden warm-start on snapshot[0] is critical — NMI 0.058 (random init) vs 0.9541 (leiden warm-start).

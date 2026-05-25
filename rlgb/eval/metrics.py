@@ -146,6 +146,26 @@ def conductance(adj: np.ndarray, labels: np.ndarray) -> float:
     return float(np.mean(conds)) if conds else 0.0
 
 
+def sparsest_cut(adj: np.ndarray, labels: np.ndarray) -> float:
+    """Multi-way sparsest cut: sum_k cut(C_k) / min(|C_k|, n - |C_k|).
+
+    This matches the NeuroCUT paper definition — node-count denominator,
+    summed over all k clusters (lower is better).
+    """
+    adj = np.asarray(adj, dtype=np.float64)
+    labels = np.asarray(labels, dtype=np.int32)
+    n = adj.shape[0]
+    total = 0.0
+    for c in np.unique(labels):
+        mask = labels == c
+        cut_c = float(adj[np.ix_(mask, ~mask)].sum())
+        sz = int(mask.sum())
+        denom = min(sz, n - sz)
+        if denom > 0:
+            total += cut_c / denom
+    return total
+
+
 def modularity(adj: np.ndarray, labels: np.ndarray) -> float:
     """Newman-Girvan modularity Q (higher = better, NOT negated here)."""
     adj = np.asarray(adj, dtype=np.float64)
@@ -264,6 +284,7 @@ def compute_all(
 
     out["h2"]                = h2(adj, labels)
     out["ncut"]              = ncut(adj, labels)
+    out["sparsest_cut"]      = sparsest_cut(adj, labels)
     out["modularity"]        = modularity(adj, labels)
     out["modularity_density"] = modularity_density(adj, labels)
     out["conductance"]       = conductance(adj, labels)

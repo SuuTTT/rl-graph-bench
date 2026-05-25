@@ -69,9 +69,9 @@ class _SS2VNet(nn.Module):
             layers.append(nn.Linear(dims[i] * 2, dims[i + 1]))
         self.sage_layers = nn.ModuleList(layers)
         self.graph_proj = nn.Linear(self.GRAPH_FEAT_DIM, hidden)
-        # Edge scorer: (h_u + h_v || h_u * h_v || g) → Q
+        # Edge scorer: (h_u+h_v || h_u*h_v || g || w_uv || cluster_sum) → Q  (+2 for edge features)
         self.edge_scorer = nn.Sequential(
-            nn.Linear(hidden * 3, hidden),
+            nn.Linear(hidden * 3 + 2, hidden),
             nn.ReLU(),
             nn.Linear(hidden, hidden // 2),
             nn.ReLU(),
@@ -83,7 +83,8 @@ class _SS2VNet(nn.Module):
         feats: torch.Tensor,
         adj: torch.Tensor,
         graph_feat: torch.Tensor,
-        edge_idx: torch.Tensor,     # (n_cands, 2) — node indices for each candidate
+        edge_idx: torch.Tensor,            # (n_cands, 2) — node indices for each candidate
+        edge_w: torch.Tensor | None = None,  # (n_cands,) signed edge weights
     ) -> torch.Tensor:
         h = feats
         deg = adj.sum(1, keepdim=True).clamp(min=1.0)
@@ -101,7 +102,15 @@ class _SS2VNet(nn.Module):
         u_emb = h[edge_idx[:, 0]]                              # (n_cands, hidden)
         v_emb = h[edge_idx[:, 1]]                              # (n_cands, hidden)
         g_exp = g.unsqueeze(0).expand(n_cands, -1)             # (n_cands, hidden)
-        ef    = torch.cat([u_emb + v_emb, u_emb * v_emb, g_exp], dim=1)  # (n_cands, hidden*3)
+        # Signed edge weight + cluster-level sum: explicit signals about merge quality
+        if edge_w is not None:
+            ew = edge_w[:n_cands]  # (n_cands, 2): [w_uv, cluster_sum]
+            if ew.dim() == 1:
+                ew = ew.unsqueeze(1)  # backward compat: (n_cands, 1)
+                ew = torch.cat([ew, torch.zeros_like(ew)], dim=1)  # pad to (n_cands, 2)
+        else:
+            ew = torch.zeros(n_cands, 2, device=feats.device)  # fallback zeros
+        ef    = torch.cat([u_emb + v_emb, u_emb * v_emb, g_exp, ew], dim=1)  # (n_cands, hidden*3+2)
         q     = self.edge_scorer(ef).squeeze(1)                # (n_cands,)
 
         # Pad to fixed max_edges size (unused slots will be masked by caller)
@@ -143,6 +152,23 @@ class SS2VAlgo(RLAgent):
         decay = (cfg.epsilon_start - cfg.epsilon_end) * max(0, 1 - self._step / cfg.epsilon_decay)
         return cfg.epsilon_end + decay
 
+    def _make_edge_w(self, obs: dict, eidx_np: np.ndarray, n_cands: int) -> torch.Tensor:
+        """Build (n_cands, 2) edge feature tensor [w_uv, cluster_sum]."""
+        adj_s = obs.get("adj_signed")
+        if adj_s is not None and len(eidx_np) > 0:
+            ew = adj_s[eidx_np[:n_cands, 0], eidx_np[:n_cands, 1]].astype(np.float32)
+        else:
+            ew = np.zeros(n_cands, dtype=np.float32)
+
+        cs = obs.get("cluster_sums")
+        if cs is not None and len(cs) > 0:
+            cs_vals = np.asarray(cs[:n_cands], dtype=np.float32)
+        else:
+            cs_vals = np.zeros(n_cands, dtype=np.float32)
+
+        combined = np.stack([ew, cs_vals], axis=1)  # (n_cands, 2)
+        return torch.from_numpy(combined).to(self._device)
+
     def select_action(self, obs: dict, greedy: bool = False) -> int:
         """Select an inter-cluster edge to contract."""
         adj_np    = obs["adj"]
@@ -171,13 +197,16 @@ class SS2VAlgo(RLAgent):
             g_feat  = torch.tensor([N, k, float(adj_np.sum()) / max(N, 1)],
                                    dtype=torch.float32, device=self._device)
             if "edge_idx" in obs and obs["edge_idx"].shape[0] > 0:
+                eidx_np = obs["edge_idx"][:n_cands]
                 eidx_t = torch.from_numpy(
-                    np.ascontiguousarray(obs["edge_idx"][:n_cands], dtype=np.int64)
+                    np.ascontiguousarray(eidx_np, dtype=np.int64)
                 ).to(self._device)
+                edge_w_t: torch.Tensor = self._make_edge_w(obs, eidx_np, n_cands)
             else:
                 eidx_t = torch.zeros((0, 2), dtype=torch.int64, device=self._device)
+                edge_w_t = None
             with torch.no_grad():
-                q = self._online(feats_t, adj_t, g_feat, eidx_t)[:n_cands]
+                q = self._online(feats_t, adj_t, g_feat, eidx_t, edge_w_t)[:n_cands]
             idx = int(q.argmax().item())
 
         self._step += 1
@@ -213,7 +242,9 @@ class SS2VAlgo(RLAgent):
             n_valid_cur = int(t.obs.get("n_edges", [self.MAX_EDGES])[0])
             n_valid_cur = max(1, min(n_valid_cur, self.MAX_EDGES))
             eidx_cur    = _eidx(t.obs, n_valid_cur)
-            q_vals  = self._online(feats_t, adj_t, g_feat, eidx_cur)
+            eidx_cur_np = t.obs["edge_idx"][:n_valid_cur] if "edge_idx" in t.obs and t.obs["edge_idx"].shape[0] > 0 else np.empty((0, 2), dtype=np.int32)
+            ew_cur      = self._make_edge_w(t.obs, eidx_cur_np, n_valid_cur)
+            q_vals  = self._online(feats_t, adj_t, g_feat, eidx_cur, ew_cur)
             act_idx = min(int(t.action), self.MAX_EDGES - 1)
             q_pred  = q_vals[act_idx]
             with torch.no_grad():
@@ -226,10 +257,12 @@ class SS2VAlgo(RLAgent):
                                       dtype=torch.float32, device=self._device)
                 n_valid_next = int(t.next_obs.get("n_edges", [self.MAX_EDGES])[0])
                 n_valid_next = max(1, min(n_valid_next, self.MAX_EDGES))
-                eidx_next     = _eidx(t.next_obs, n_valid_next)
-                q_online_next = self._online(feat_n, adj_n, g2, eidx_next)
+                eidx_next    = _eidx(t.next_obs, n_valid_next)
+                eidx_next_np = t.next_obs["edge_idx"][:n_valid_next] if "edge_idx" in t.next_obs and t.next_obs["edge_idx"].shape[0] > 0 else np.empty((0, 2), dtype=np.int32)
+                ew_next      = self._make_edge_w(t.next_obs, eidx_next_np, n_valid_next)
+                q_online_next = self._online(feat_n, adj_n, g2, eidx_next, ew_next)
                 best_next_act = int(q_online_next[:n_valid_next].argmax().item())
-                q_next = self._target(feat_n, adj_n, g2, eidx_next)[best_next_act]
+                q_next = self._target(feat_n, adj_n, g2, eidx_next, ew_next)[best_next_act]
                 q_tgt  = t.reward + self._cfg.gamma * q_next * (1 - float(t.done))
             total_loss += F.smooth_l1_loss(q_pred, q_tgt)
 
@@ -243,6 +276,48 @@ class SS2VAlgo(RLAgent):
             self._target.load_state_dict(self._online.state_dict())
 
         return {"loss": float(loss.item()), "epsilon": self._eps}
+
+    def bc_update(self, obs: dict, expert_action: int) -> float:
+        """Behavioral cloning update: train Q to rank expert_action highest.
+
+        Cross-entropy loss: Q[expert_action] maximised relative to all candidate
+        edges.  This teaches the agent GAEC's greedy "pick max-weight positive
+        edge" policy before expensive RL exploration begins.
+        """
+        if "edge_idx" not in obs or obs["edge_idx"].shape[0] == 0:
+            return 0.0
+        n_cands = int(obs.get("n_edges", [0])[0])
+        if n_cands <= 1:
+            return 0.0
+        n_cands = min(n_cands, self.MAX_EDGES)
+
+        labels_np = obs["labels"]
+        k = int(labels_np.max()) + 1
+        N = len(labels_np)
+        adj_sum = float(np.sum(obs["adj"]))
+
+        adj_t   = torch.from_numpy(np.ascontiguousarray(obs["adj"], dtype=np.float32)).to(self._device)
+        feats_t = torch.from_numpy(np.ascontiguousarray(obs["node_feats"], dtype=np.float32)).to(self._device)
+        g_feat  = torch.tensor([N, k, adj_sum / max(N, 1)],
+                                dtype=torch.float32, device=self._device)
+
+        eidx_np = obs["edge_idx"][:n_cands]
+        eidx_t  = torch.from_numpy(np.ascontiguousarray(eidx_np, dtype=np.int64)).to(self._device)
+        ew_t    = self._make_edge_w(obs, eidx_np, n_cands)
+
+        q_vals = self._online(feats_t, adj_t, g_feat, eidx_t, ew_t)[:n_cands]  # (n_cands,)
+
+        act    = min(int(expert_action), n_cands - 1)
+        target = torch.tensor([act], dtype=torch.long, device=self._device)
+        loss   = F.cross_entropy(q_vals.unsqueeze(0), target)
+
+        self._optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(self._online.parameters(), self._cfg.grad_clip)
+        self._optimizer.step()
+        self._step += 1
+
+        return float(loss.item())
 
     def reset_episode(self) -> None:
         pass
