@@ -76,6 +76,11 @@ class CLAREAlgo(RLAgent):
         total = n_exc + n_exp
 
         if total == 0:
+            if not greedy:
+                zero = torch.zeros(1, device=self._device, requires_grad=True).squeeze()
+                self._ep_log_probs.append(zero)
+                self._ep_values.append(zero)
+                self._ep_entropies.append(zero)
             return total  # STOP
 
         # Determine current cluster from labels of first exclude candidate

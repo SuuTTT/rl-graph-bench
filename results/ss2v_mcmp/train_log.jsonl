@@ -49,3 +49,9 @@
 {"episode": 2000, "mean_return": 14.99175, "mean_len": 20.75, "elapsed_s": 668.8, "loss": 4.537577, "epsilon": 0.005}
 {"episode": 2500, "mean_return": 15.1754, "mean_len": 19.05, "elapsed_s": 855.9, "loss": 4.153174, "epsilon": 0.005}
 {"episode": 3000, "mean_return": 15.53612, "mean_len": 24.72, "elapsed_s": 1075.3, "loss": 4.965326, "epsilon": 0.005}
+{"episode": 500, "mean_return": 17.72953, "mean_len": 24.25, "elapsed_s": 20.6, "loss": 9.105376, "epsilon": 0.005}
+{"episode": 1000, "mean_return": 18.58259, "mean_len": 22.2, "elapsed_s": 40.0, "loss": 9.373548, "epsilon": 0.005}
+{"episode": 1500, "mean_return": 22.84448, "mean_len": 25.13, "elapsed_s": 61.8, "loss": 11.121235, "epsilon": 0.005}
+{"episode": 2000, "mean_return": 14.96341, "mean_len": 20.75, "elapsed_s": 80.5, "loss": 4.657463, "epsilon": 0.005}
+{"episode": 2500, "mean_return": 15.1754, "mean_len": 19.05, "elapsed_s": 97.9, "loss": 3.602854, "epsilon": 0.005}
+{"episode": 3000, "mean_return": 15.53612, "mean_len": 24.72, "elapsed_s": 118.4, "loss": 4.965481, "epsilon": 0.005}

@@ -58,11 +58,19 @@ def _load_jsonl(path: Path) -> pd.DataFrame:
 
 @st.cache_data(ttl=30)
 def _load_all_csvs(results_dir: Path) -> pd.DataFrame:
-    """Concatenate all eval_*.csv files in results_dir."""
-    csvs = sorted(results_dir.glob("eval_*.csv"))
+    """Concatenate all result CSV files in results_dir."""
+    csvs = sorted(results_dir.glob("*.csv"))
     if not csvs:
         return pd.DataFrame()
-    return pd.concat([pd.read_csv(f) for f in csvs], ignore_index=True)
+    dfs = []
+    for f in csvs:
+        try:
+            dfs.append(pd.read_csv(f))
+        except Exception:
+            pass
+    if not dfs:
+        return pd.DataFrame()
+    return pd.concat(dfs, ignore_index=True, sort=False)
 
 
 def _discover_training_logs(results_dir: Path) -> dict[str, Path]:
@@ -101,7 +109,7 @@ st.sidebar.title("🕸 RL Graph Bench")
 st.sidebar.markdown("---")
 tab_choice = st.sidebar.radio(
     "View",
-    ["Training Curves", "Comparison Table", "Graph Visualiser", "Quick Train"],
+    ["Training Curves", "Comparison Table", "Community Expansion Visualiser", "Graph Visualiser", "Quick Train"],
     index=0,
 )
 
@@ -168,6 +176,119 @@ elif tab_choice == "Comparison Table":
         st.download_button("Download CSV", csv_bytes, "eval_results.csv", "text/csv")
 
 # ── Tab 3: Graph Visualiser ───────────────────────────────────────────────────
+
+elif tab_choice == "Community Expansion Visualiser":
+    st.header("Local Community Expansion Visualiser")
+    st.markdown("Select a seed query node and watch the GNN policy or S-Coverage expand the local community step-by-step.")
+
+    col_a, col_b, col_c = st.columns(3)
+    algo_type = col_a.selectbox("Algorithm", ["SLRL (S-Coverage)", "Random Expansion"])
+    n_nodes = col_b.slider("Graph Nodes (N)", 30, 100, 50)
+    mu_lfr = col_c.slider("Modularity / Density (LFR μ)", 0.1, 0.6, 0.25)
+
+    # 1. Generate SBM graph
+    try:
+        from rlgb.data.synthetic import sbm
+        # For visualization, generate a distinct community
+        adj, lab, k = sbm(n_nodes, k=3, p_in=0.35, p_out=0.03, seed=42)
+    except Exception:
+        # Fallback to simple random SBM
+        adj = np.eye(n_nodes)
+        lab = np.zeros(n_nodes, dtype=int)
+    
+    # Target community
+    true_comm = set(np.where(lab == 0)[0].tolist())
+    if not true_comm:
+        true_comm = {0, 1, 2, 3, 4}
+    
+    col_x, col_y = st.columns(2)
+    seed_node = col_x.selectbox("Seed Query Node", sorted(list(true_comm)), index=0)
+    steps = col_y.slider("Expansion Steps", 0, 6, 2)
+
+    # 2. Simulate expansion steps
+    S = {seed_node}
+    import networkx as nx
+    G = nx.from_numpy_array(adj)
+    adj_sets = {i: frozenset(G.neighbors(i)) for i in range(n_nodes)}
+    
+    history = [list(S)]
+    
+    for _ in range(steps):
+        boundary = []
+        for node in S:
+            boundary.extend(list(set(G.neighbors(node)) - S))
+        boundary = list(set(boundary))
+        
+        if not boundary:
+            break
+            
+        if algo_type == "SLRL (S-Coverage)":
+            best_node = -1
+            best_score = -1.0
+            S_f = frozenset(S)
+            sz = len(S)
+            for v in boundary:
+                nb_v = adj_sets[v]
+                score = len(nb_v & S_f) / sz
+                if score > best_score:
+                    best_score = score
+                    best_node = v
+            if best_node != -1:
+                S.add(best_node)
+        else:
+            S.add(random.choice(boundary))
+        history.append(list(S))
+
+    # Node coloring based on state
+    node_colors = []
+    node_text = []
+    for i in range(n_nodes):
+        if i == seed_node:
+            node_colors.append("red") # Crimson Query Seed
+            node_text.append(f"Node {i} (Seed Query Node)")
+        elif i in S:
+            node_colors.append("gold") # Predicted Local Community
+            node_text.append(f"Node {i} (Predicted Community)")
+        elif i in true_comm:
+            node_colors.append("orange") # Ground Truth Community Node
+            node_text.append(f"Node {i} (Ground Truth Member)")
+        else:
+            node_colors.append("lightgrey") # Background Nodes
+            node_text.append(f"Node {i} (Background)")
+
+    # 3. Plotly Visualization
+    try:
+        pos = nx.spring_layout(G, seed=42)
+        xs = [pos[i][0] for i in range(len(pos))]
+        ys = [pos[i][1] for i in range(len(pos))]
+
+        edge_x, edge_y = [], []
+        for u, v in G.edges():
+            edge_x += [pos[u][0], pos[v][0], None]
+            edge_y += [pos[u][1], pos[v][1], None]
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=edge_x, y=edge_y, mode="lines",
+                                  line=dict(width=0.5, color="#ccc"), hoverinfo="none"))
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="markers",
+            marker=dict(size=12, color=node_colors, line=dict(width=1, color="black")),
+            text=node_text,
+            hoverinfo="text",
+        ))
+        
+        # Add legend indicators manually
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", marker=dict(size=12, color="red"), name="Seed Query Node"))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", marker=dict(size=12, color="gold"), name="Predicted Community"))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", marker=dict(size=12, color="orange"), name="Ground Truth Member"))
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", marker=dict(size=12, color="lightgrey"), name="Background"))
+
+        fig.update_layout(showlegend=True, template="plotly_white",
+                          xaxis=dict(showticklabels=False), yaxis=dict(showticklabels=False),
+                          height=500, title=f"Local Community Search (Steps={steps}, Size={len(S)})")
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.error(f"networkx required for graph layout generation: {e}")
 
 elif tab_choice == "Graph Visualiser":
     st.header("Graph Visualiser")

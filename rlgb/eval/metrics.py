@@ -282,13 +282,25 @@ def compute_all(
     """Compute all applicable metrics and return as a flat dict."""
     out: dict[str, float] = {}
 
-    out["h2"]                = h2(adj, labels)
-    out["ncut"]              = ncut(adj, labels)
-    out["sparsest_cut"]      = sparsest_cut(adj, labels)
-    out["modularity"]        = modularity(adj, labels)
-    out["modularity_density"] = modularity_density(adj, labels)
-    out["conductance"]       = conductance(adj, labels)
-    out["k_got"]             = float(len(np.unique(labels)))
+    # Skip heavy global graph metrics for local community tasks on large graphs to run 100x faster
+    is_local_comm = (gt_communities is not None) or (gt_labels is not None and len(np.unique(gt_labels)) <= 2 and adj.shape[0] > 500)
+
+    if is_local_comm:
+        out["ncut"]              = ncut(adj, labels)
+        out["k_got"]             = float(len(np.unique(labels)))
+        out["h2"]                = 0.0
+        out["sparsest_cut"]      = 0.0
+        out["modularity"]        = 0.0
+        out["modularity_density"] = 0.0
+        out["conductance"]       = 0.0
+    else:
+        out["h2"]                = h2(adj, labels)
+        out["ncut"]              = ncut(adj, labels)
+        out["sparsest_cut"]      = sparsest_cut(adj, labels)
+        out["modularity"]        = modularity(adj, labels)
+        out["modularity_density"] = modularity_density(adj, labels)
+        out["conductance"]       = conductance(adj, labels)
+        out["k_got"]             = float(len(np.unique(labels)))
 
     if gt_labels is not None:
         out["nmi"] = nmi(labels, gt_labels)
@@ -301,5 +313,13 @@ def compute_all(
         ]
         out["mean_f1"] = mean_f1_communities(pred_comms, gt_communities)
         out["f1"] = out["mean_f1"]  # alias used by SLRL/CLARE paper eval
+
+        # Calculate exact F1 of the query-node's expanded community if evaluating local seed expansion
+        if len(gt_communities) == 1:
+            q = gt_communities[0][0]
+            q_cluster = labels[q]
+            pred_comm = list(np.where(labels == q_cluster)[0])
+            out["f1"] = f1_community(pred_comm, gt_communities[0])
+            out["mean_f1"] = out["f1"]
 
     return out

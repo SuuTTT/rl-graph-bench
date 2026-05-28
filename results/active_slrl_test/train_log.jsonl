@@ -1,0 +1,5 @@
+{"episode": 10, "mean_return": 0.16804, "mean_len": 7.1, "elapsed_s": 0.1}
+{"episode": 20, "mean_return": 0.0694, "mean_len": 5.4, "elapsed_s": 0.3, "pg_loss": -0.316788, "v_loss": 0.957517, "entropy": 1.758061, "loss": 0.14439}
+{"episode": 30, "mean_return": 0.10832, "mean_len": 3.6, "elapsed_s": 0.4}
+{"episode": 40, "mean_return": 0.22327, "mean_len": 8.1, "elapsed_s": 0.5, "pg_loss": 0.294129, "v_loss": 0.978927, "entropy": 2.112404, "loss": 0.762468}
+{"episode": 50, "mean_return": 0.15703, "mean_len": 5.0, "elapsed_s": 0.7}

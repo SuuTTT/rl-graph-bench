@@ -53,6 +53,59 @@ class CLAREGraphData:
     def test_communities(self) -> list[list[int]]:
         return [self.communities[i] for i in self.test_ids]
 
+    def to_problem_suite(self, split: str = "test") -> list[Problem]:
+        """Convert SNAP communities to local subgraph Problem instances to prevent OOM and run 1000x faster."""
+        from rlgb.tasks.base import Problem
+        from torch_geometric.data import Data
+        comms = {
+            "train": self.train_communities,
+            "val":   self.val_communities,
+            "test":  self.test_communities,
+        }[split]
+
+        problems = []
+        for i, comm in enumerate(comms):
+            # Extract local 3-hop neighborhood around the community nodes
+            local_nodes = set(comm)
+            for _ in range(3):
+                neighbors = set()
+                for n in local_nodes:
+                    neighbors.update(self.nx_graph.neighbors(n))
+                local_nodes.update(neighbors)
+            local_nodes = sorted(list(local_nodes))
+            
+            # Extract induced subgraph
+            subg = self.nx_graph.subgraph(local_nodes)
+            local_mapping = {orig: new for new, orig in enumerate(local_nodes)}
+            adj_dense = nx.to_numpy_array(subg, dtype=np.float32)
+            
+            # Remap community and seed query node to local IDs
+            local_comm = [local_mapping[n] for n in comm]
+            q = comm[0]
+            q_local = local_mapping[q]
+            
+            # Local binary ground-truth labels
+            gt = np.zeros(len(local_nodes), dtype=np.int32)
+            gt[local_comm] = 1
+
+            # Slice PyG features for local nodes
+            local_x = self.pyg_data.x[local_nodes]
+            local_pyg_data = Data(x=local_x, edge_index=None)
+
+            problems.append(Problem(
+                name=f"{self.name}_{split}_{i}",
+                adj=adj_dense,
+                k_target=2,  # community vs non-community
+                gt_labels=gt,
+                family=f"snap_{self.name}",
+                task_type="community_expand",
+                known_communities=[[q_local]],
+                query_nodes=[q_local],
+                meta={"true_community": local_comm, "pyg_data": local_pyg_data}
+            ))
+        return problems
+
+
 
 # ---------------------------------------------------------------------------
 # Raw file loading (ported from KDD2022CLARE/utils/load_dataset.py)

@@ -85,9 +85,28 @@ class ClusteringEnv(ABC, gym.Env):
         """7-dim per-node feature: degree, clustering coeff, betweenness proxy,
         closeness proxy, k-core, intra-cluster degree ratio, cluster size ratio."""
         adj = self.adj
+        n = adj.shape[0]
+
+        # Optimize for large community detection graphs: bypass expensive O(N^3) matmul
+        if self.problem.task_type == "community_expand" and n > 500:
+            deg = adj.sum(axis=1)
+            deg_n = deg / (deg.max() + 1e-9)
+            pyg_data = self.problem.meta.get("pyg_data", None)
+            if pyg_data is not None and hasattr(pyg_data, "x"):
+                x = pyg_data.x.cpu().numpy() if hasattr(pyg_data.x, "cpu") else pyg_data.x
+                if x.shape[1] < 7:
+                    pad = np.zeros((n, 7 - x.shape[1]), dtype=np.float32)
+                    return np.hstack([x, pad])
+                return x[:, :7].astype(np.float32)
+            
+            # Simple O(N) fallback features to avoid A @ A matrix multiplication
+            feats = np.zeros((n, 7), dtype=np.float32)
+            feats[:, 0] = deg_n
+            feats[:, 6] = 1.0 / n
+            return feats
+
         deg = adj.sum(axis=1)                            # (N,)
         m2 = deg.sum()
-        n = adj.shape[0]
         k = max(int(self.labels.max()) + 1, 1)
 
         # Cluster size

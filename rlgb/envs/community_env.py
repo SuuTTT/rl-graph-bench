@@ -48,9 +48,11 @@ class CommunityEnv(ClusteringEnv):
         cluster_id: int = 0,
         horizon: int = 8,
         seed: int = 0,
+        warm_start: str = "leiden",
     ) -> None:
         super().__init__(task=task, problem=problem, horizon=horizon, seed=seed)
         self.cluster_id = cluster_id
+        self._warm_start = warm_start
         # Action = index into [exclude_cands | expand_cands | stop]
         # We use Discrete(MAX_CANDS + 1) and mask illegals at select time
         self.action_space = spaces.Discrete(self.MAX_CANDS + 1)  # +1 for STOP
@@ -96,7 +98,7 @@ class CommunityEnv(ClusteringEnv):
 
         reward = self.task.reward(self.adj, old_labels, self.labels, self.problem)
         self._step_count += 1
-        terminated = self._step_count >= self.horizon
+        terminated = (self._step_count >= self.horizon) or (action >= total or action == stop_action)
         return self._build_obs(), float(reward), terminated, False, {"step": self._step_count}
 
     # ── candidate computation ────────────────────────────────────────────────
@@ -125,6 +127,13 @@ class CommunityEnv(ClusteringEnv):
         return best if cluster_weight[best] > 0 else exclude
 
     def _warm_start_labels(self) -> np.ndarray:
+        if self._warm_start == "seed" and self.problem.known_communities is not None:
+            # Seed community initialization: cluster_id for seeds, 1 - cluster_id for others
+            labels = np.ones(self.problem.n, dtype=np.int32) * (1 - self.cluster_id)
+            for q in self.problem.known_communities[0]:
+                labels[q] = self.cluster_id
+            return labels
+
         try:
             import igraph as ig
             import leidenalg as la

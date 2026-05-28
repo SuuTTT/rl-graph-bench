@@ -29,7 +29,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from rlgb.algos.base import RLAgent, EpisodeBuffer, Transition
-from rlgb.training.reinforce import compute_returns
+from rlgb.training.reinforce import compute_returns, REINFORCEConfig, reinforce_loss
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -657,27 +657,123 @@ class SLRLAlgo(RLAgent):
     # ── legacy RLAgent interface ──────────────────────────────────────────────
 
     def select_action(self, obs: dict, greedy: bool = False) -> int:
-        """Stub for legacy CommunityEnv — returns first EXPAND or STOP."""
+        """Standard Gym-compatible action selection supporting both S-coverage and neural paths."""
         n_exc = int(obs["n_exclude"][0])
         n_exp = int(obs["n_expand"][0])
         total = n_exc + n_exp
-        if total == 0:
-            return 0
-        if n_exp > 0:
-            return n_exc    # first EXPAND index
-        return total        # STOP
+        
+        if total == 0 or n_exp == 0:
+            if not greedy:
+                zero = torch.zeros(1, device=self._device, requires_grad=True).squeeze()
+                self._ep_log_probs.append(zero)
+                self._ep_values.append(zero)
+                self._ep_entropies.append(zero)
+            return total  # STOP
+            
+        labels = obs["labels"]
+        # In CommunityEnv, we assume cluster_id is the community we are rewriting
+        cluster_id = 0
+        if n_exc > 0:
+            cluster_id = int(labels[obs["exclude_nodes"][0]])
+        else:
+            uniq, counts = np.unique(labels, return_counts=True)
+            if len(uniq) > 1:
+                cluster_id = int(uniq[np.argmin(counts)])
+                
+        S = set(np.where(labels == cluster_id)[0].tolist())
+        if not S:
+            return total  # STOP
+            
+        adj = obs["adj"]
+        n = adj.shape[0]
+        
+        # 1. Greedy s-coverage path
+        if self._cfg.scov_threshold > 0.0:
+            expand_cands = obs["expand_nodes"][:n_exp].tolist()
+            best_idx = -1
+            best_score = -1.0
+            S_f = frozenset(S)
+            sz = len(S)
+            for i, v in enumerate(expand_cands):
+                # Neighbors of v are where adj[v] > 0
+                nb_v = frozenset(np.where(adj[v] > 0)[0].tolist())
+                score = len(nb_v & S_f) / sz
+                if score > best_score:
+                    best_score = score
+                    best_idx = i
+                    
+            if best_score <= self._cfg.scov_threshold:
+                return total  # STOP
+            return n_exc + best_idx
+            
+        # 2. Neural network path
+        # Preprocess features
+        degree = np.sum(adj > 0, axis=1)
+        max_degree = float(degree.max()) if degree.size > 0 else 1.0
+        
+        # Retrieve or default query/seed node (first node in S)
+        query = sorted(list(S))[0]
+        
+        adj_sets = {i: frozenset(np.where(adj[i] > 0)[0].tolist()) for i in range(n)}
+        
+        expand_cands = obs["expand_nodes"][:n_exp].tolist()
+        cand_np  = _node_features(expand_cands, S, query, adj_sets, degree, max_degree)
+        query_np = _node_features([query], S, query, adj_sets, degree, max_degree)
+        comm_np  = _node_features(list(S), S, query, adj_sets, degree, max_degree)
+        
+        cand_t  = torch.from_numpy(cand_np).to(self._device)
+        query_t = torch.from_numpy(query_np).to(self._device)
+        comm_t  = torch.from_numpy(comm_np).to(self._device)
+        
+        if greedy:
+            with torch.no_grad():
+                logits, value = self._model(cand_t, query_t, comm_t)
+            action = int(logits.argmax().item())
+        else:
+            logits, value = self._model(cand_t, query_t, comm_t)
+            dist = torch.distributions.Categorical(logits=logits)
+            action_t = dist.sample()
+            self._ep_log_probs.append(dist.log_prob(action_t))
+            self._ep_values.append(value.squeeze())
+            self._ep_entropies.append(dist.entropy())
+            action = int(action_t.item())
+            
+        if action >= n_exp:
+            return total  # STOP
+            
+        return n_exc + action
 
     def push_transition(self, t: Transition) -> None:
         self._ep_rewards.append(t.reward)
         self._buffer.push(t)
 
     def update(self) -> dict[str, float]:
-        self._ep_log_probs.clear()
-        self._ep_values.clear()
-        self._ep_entropies.clear()
-        self._ep_rewards.clear()
+        if not self._ep_rewards or not self._ep_log_probs:
+            return {}
+
+        returns = compute_returns(self._ep_rewards, self._cfg.gamma)
+        rl_cfg = REINFORCEConfig(
+            gamma=self._cfg.gamma,
+            entropy_coef=self._cfg.entropy_coef,
+            value_coef=self._cfg.value_coef,
+            grad_clip=self._cfg.grad_clip,
+            normalize_returns=True,
+        )
+        loss, metrics = reinforce_loss(
+            self._ep_log_probs,
+            self._ep_values,
+            self._ep_entropies,
+            returns,
+            rl_cfg,
+            self._device,
+        )
+        self._optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(self._model.parameters(), self._cfg.grad_clip)
+        self._optimizer.step()
+        self.reset_episode()
         self._buffer.drain()
-        return {}
+        return metrics
 
     def reset_episode(self) -> None:
         self._ep_log_probs.clear()
